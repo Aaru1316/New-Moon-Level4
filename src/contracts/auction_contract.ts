@@ -33,7 +33,10 @@ export class SealedBidAuctionContract {
       winningAmount: null,
       winningBidder: null,
       isVerified: false,
-      proofTimestamp: null
+      proofTimestamp: null,
+      auditLogs: [
+        { timestamp: Date.now(), action: 'INITIALIZE', details: `Auction ${auctionId} initialized on Midnight Preprod` }
+      ]
     };
   }
 
@@ -101,6 +104,12 @@ export class SealedBidAuctionContract {
     // Mark nullifier as spent
     this.state.bidderNullifiers.push(nullifier);
 
+    this.state.auditLogs.push({
+      timestamp: Date.now(),
+      action: 'COMMIT_BID',
+      details: `Bidder ${bidderAddress.substring(0, 10)}... committed hidden bid (${commitment.substring(0, 14)}...)`
+    });
+
     return {
       success: true,
       message: 'Sealed bid commitment successfully registered on-chain.',
@@ -121,6 +130,11 @@ export class SealedBidAuctionContract {
     }
 
     this.state.auctionOpen = false;
+    this.state.auditLogs.push({
+      timestamp: Date.now(),
+      action: 'CLOSE_AUCTION',
+      details: 'Auction closed by organizer. Bids locked.'
+    });
 
     return {
       success: true,
@@ -143,6 +157,12 @@ export class SealedBidAuctionContract {
     });
 
     if (!verification.valid) {
+      this.state.auditLogs.push({
+        timestamp: Date.now(),
+        action: 'VERIFY_REJECTED',
+        details: `Winner claim rejected: ${verification.reason}`
+      });
+
       return {
         success: false,
         message: `Winner verification rejected: ${verification.reason}`,
@@ -156,6 +176,12 @@ export class SealedBidAuctionContract {
     this.state.winningBidder = proofPayload.winningBidder;
     this.state.isVerified = true;
     this.state.proofTimestamp = Date.now();
+
+    this.state.auditLogs.push({
+      timestamp: Date.now(),
+      action: 'VERIFY_SUCCESS',
+      details: `Winner verified! Bidder ${proofPayload.winningBidder.substring(0, 10)}... won with ${proofPayload.winningAmount} ttDUST (ZK Proof verified)`
+    });
 
     return {
       success: true,
