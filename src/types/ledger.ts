@@ -28,6 +28,7 @@ export interface SealedBidAuctionState extends BaseVotingState {
   winningBidder: string | null;
   isVerified: boolean;
   proofTimestamp: number | null;
+  auditLogs: Array<{ timestamp: number; action: string; details: string }>;
 }
 
 // ZK Proof Payload for Highest Bid Verification
