@@ -1,6 +1,6 @@
 # Aaru New Moon Level 4 — Sealed-Bid Auction with Verifiable Winner
 
-![CI Pipeline](https://github.com/Aaru1316/New-Moon-Level4/actions/workflows/ci.yml/badge.svg)
+![CI Pipeline](https://github.com/Naveen-Kumar-Saini/Moon-Midnight4/actions/workflows/ci.yml/badge.svg)
 [![Network](https://img.shields.io/badge/Blockchain-Midnight%20%7C%20Cardano%20Preprod-003366)](https://preprod.cardanoscan.io)
 [![Privacy](https://img.shields.io/badge/Privacy-Zero--Knowledge%20Range%20Proof-purple)](#why-its-private)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -80,7 +80,7 @@ The contract retains all Level 3 governance fields (`yesTally`, `noTally`, `null
 ### Installation & Run
 ```bash
 # Clone the repository
-git clone https://github.com/Aaru1316/New-Moon-Level4.git
+git clone https://github.com/Naveen-Kumar-Saini/Moon-Midnight4.git
 cd New-Moon-Level4
 
 # Install dependencies
