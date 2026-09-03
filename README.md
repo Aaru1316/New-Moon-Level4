@@ -1,5 +1,5 @@
 # Aaru Eclipse — Privacy-Preserving Multi-Lot ZK Auction & Trustless Escrow Engine
-
+**Deploy link**  = https://new-moon-level4-g55xo64nb-aaru7.vercel.app/
 ![CI Pipeline](https://github.com/Aaru1316/New-Moon-Level4/actions/workflows/ci.yml/badge.svg)
 [![Network](https://img.shields.io/badge/Blockchain-Midnight%20%7C%20Cardano%20Preprod-003366)](https://preprod.cardanoscan.io)
 [![Privacy](https://img.shields.io/badge/Privacy-Zero--Knowledge%20Range%20Proof%20%2B%20Poseidon-purple)](#why-its-private)
@@ -83,7 +83,7 @@ Traditional auctions force participants to choose between public bidding (exposi
 ![alt text](image-2.png)
 
 **CI Pipeline**
-
+![alt text](image-3.png)
 
 ## 5. Local Setup & Usage Instructions
 
