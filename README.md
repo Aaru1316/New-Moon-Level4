@@ -1,6 +1,6 @@
 # Aaru Eclipse — Privacy-Preserving Multi-Lot ZK Auction & Trustless Escrow Engine
 
-![CI Pipeline](https://github.com/Naveen-Kumar-Saini/Moon-Midnight4/actions/workflows/ci.yml/badge.svg)
+![CI Pipeline](https://github.com/Aaru1316/New-Moon-Level4/actions/workflows/ci.yml/badge.svg)
 [![Network](https://img.shields.io/badge/Blockchain-Midnight%20%7C%20Cardano%20Preprod-003366)](https://preprod.cardanoscan.io)
 [![Privacy](https://img.shields.io/badge/Privacy-Zero--Knowledge%20Range%20Proof%20%2B%20Poseidon-purple)](#why-its-private)
 [![Escrow](https://img.shields.io/badge/Escrow-Trustless%20ttDUST%20Vault-emerald)](#trustless-escrow)
@@ -94,7 +94,7 @@ Traditional auctions force participants to choose between public bidding (exposi
 ### Installation & Run
 ```bash
 # Clone the repository
-git clone https://github.com/Naveen-Kumar-Saini/Moon-Midnight4.git
+git clone https://github.com/Aaru1316/New-Moon-Level4.git
 cd New-Moon-Level4
 
 # Install dependencies
