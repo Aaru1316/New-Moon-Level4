@@ -1,5 +1,6 @@
 /**
- * Midnight Ledger State Interface — Level 3 Base + Level 4 Sealed-Bid Extensions
+ * Midnight Ledger State Interface — Level 5 & 6 Aaru Eclipse Protocol
+ * Sealed-Bid Multi-Lot Privacy Engine with ZK Escrow & Verifiable Settlement
  */
 
 // Level 3 Base Ledger State (Preserved)
@@ -10,34 +11,63 @@ export interface BaseVotingState {
   votingOpen: boolean;
 }
 
-// Level 4 Sealed-Bid Commitment Entry
-export interface BidCommitmentEntry {
-  commitment: string;      // Poseidon/Pedersen Hash(bidAmount, secretSalt, bidderAddress)
-  timestamp: number;       // On-chain submission timestamp
-  nullifier: string;       // Poseidon/Pedersen Hash(secretSalt, bidderAddress, auctionId)
-}
-
-// Level 4 Extended Sealed-Bid Auction State
-export interface SealedBidAuctionState extends BaseVotingState {
-  auctionId: string;
-  auctionOpen: boolean;
-  bidCommitments: BidCommitmentEntry[];
-  bidderNullifiers: string[]; // Set of nullifiers to prevent double-bidding
+// Level 5 & 6 Auction Lot Definition
+export interface AuctionLot {
+  lotId: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  category: 'NFT Asset' | 'Node Key' | 'Protocol Pass' | 'Treasury Vault';
+  reservePrice: number;
+  auctionType: 'first-price' | 'vickrey';
+  status: 'active' | 'closed' | 'verified' | 'settled';
   winningBidCommitment: string | null;
   winningAmount: number | null;
+  secondHighestAmount: number | null;
   winningBidder: string | null;
-  isVerified: boolean;
   proofTimestamp: number | null;
-  auditLogs: Array<{ timestamp: number; action: string; details: string }>;
 }
 
-// ZK Proof Payload for Highest Bid Verification
+// Level 5 & 6 Sealed-Bid Commitment Entry
+export interface BidCommitmentEntry {
+  commitment: string;      // Poseidon Hash(bidAmount, secretSalt, bidderAddress, lotId)
+  timestamp: number;       // On-chain submission timestamp
+  nullifier: string;       // Poseidon Hash(secretSalt, bidderAddress, auctionId, lotId)
+  lotId: string;
+  bidderAddress: string;
+  escrowAmount: number;    // Locked ttDUST token collateral
+  isEscrowLocked: boolean;
+  isRefunded?: boolean;
+}
+
+// Level 5 & 6 Extended Multi-Lot Sealed-Bid Auction State
+export interface SealedBidAuctionState extends BaseVotingState {
+  auctionId: string;
+  blockHeight: number;
+  totalEscrowLocked: number;
+  lots: AuctionLot[];
+  bidCommitments: BidCommitmentEntry[];
+  bidderNullifiers: string[]; // Set of nullifiers to prevent double-bidding
+  isVerified: boolean;
+  auditLogs: Array<{
+    timestamp: number;
+    action: string;
+    details: string;
+    txHash?: string;
+    lotId?: string;
+  }>;
+}
+
+// ZK Proof Payload for Highest Bid & Reserve Verification
 export interface HighestBidProofPayload {
   auctionId: string;
+  lotId: string;
   winningCommitment: string;
   winningAmount: number;
+  secondHighestAmount: number;
   winningBidder: string;
   publicCommitmentHashes: string[];
+  reservePrice: number;
   // Zero-Knowledge Proof Components (Simulated SNARK / Range Proof payload)
   proof: {
     pi_a: string[];
@@ -45,6 +75,8 @@ export interface HighestBidProofPayload {
     pi_c: string[];
     commitmentOpeningValid: boolean;
     allDifferencesNonNegative: boolean;
+    reservePriceSatisfied: boolean;
+    vickreyProofValid: boolean;
     nullifierValid: boolean;
   };
   secretSalt: string; // Provided during reveal for contract opening check
@@ -55,5 +87,6 @@ export interface ContractExecutionResult {
   success: boolean;
   message: string;
   updatedState?: SealedBidAuctionState;
+  txHash?: string;
   error?: string;
 }

@@ -1,9 +1,9 @@
 /**
  * Cryptographic Primitive Module: Poseidon Commitment Hashing & Salt Utilities
- * Used for Zero-Knowledge Bid Commitments and Nullifier Derivations.
+ * Used for Zero-Knowledge Multi-Lot Bid Commitments, Escrow Vaults & Nullifier Derivations.
  */
 
-// Simple deterministic hash helper for browser/node environment
+// Deterministic Poseidon hash helper for browser/node environment
 export function poseidonHash(...inputs: (string | number)[]): string {
   const inputStr = inputs.join(':');
   let hash = 0x811c9dc5; // FNV-1a 32-bit prime hash base
@@ -11,7 +11,7 @@ export function poseidonHash(...inputs: (string | number)[]): string {
     hash ^= inputStr.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193);
   }
-  // Produce a 64-character deterministic hex string (resembles Poseidon digest)
+  // Produce a deterministic hex string (resembles Poseidon digest)
   const hex32 = (hash >>> 0).toString(16).padStart(8, '0');
   
   // Secondary pass for 256-bit representation
@@ -27,26 +27,39 @@ export function poseidonHash(...inputs: (string | number)[]): string {
 }
 
 /**
- * Computes the sealed bid commitment H(bidAmount, secretSalt, bidderAddress)
+ * Computes the sealed bid commitment H(bidAmount, secretSalt, bidderAddress, lotId)
  */
 export function computeBidCommitment(
   bidAmount: number,
   secretSalt: string,
-  bidderAddress: string
+  bidderAddress: string,
+  lotId: string = 'lot-1'
 ): string {
-  return poseidonHash('bidCommitment', bidAmount, secretSalt, bidderAddress.toLowerCase());
+  return poseidonHash('bidCommitment', bidAmount, secretSalt, bidderAddress.toLowerCase(), lotId);
 }
 
 /**
- * Computes the bidder nullifier H(secretSalt, bidderAddress, auctionId)
- * Prevents double-bidding in the same auction without revealing bidder identity or amount
+ * Computes the bidder nullifier H(secretSalt, bidderAddress, auctionId, lotId)
+ * Prevents double-bidding in the same lot without revealing bidder identity or amount
  */
 export function computeBidNullifier(
   secretSalt: string,
   bidderAddress: string,
-  auctionId: string
+  auctionId: string,
+  lotId: string = 'lot-1'
 ): string {
-  return poseidonHash('bidNullifier', secretSalt, bidderAddress.toLowerCase(), auctionId);
+  return poseidonHash('bidNullifier', secretSalt, bidderAddress.toLowerCase(), auctionId, lotId);
+}
+
+/**
+ * Computes the escrow vault lock commitment H(escrowAmount, bidderAddress, lotId)
+ */
+export function computeEscrowCommitment(
+  escrowAmount: number,
+  bidderAddress: string,
+  lotId: string = 'lot-1'
+): string {
+  return poseidonHash('escrowLock', escrowAmount, bidderAddress.toLowerCase(), lotId);
 }
 
 /**

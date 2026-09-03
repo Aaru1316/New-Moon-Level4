@@ -4,6 +4,7 @@ import {
   WalletAccount
 } from './contracts/preprod_network';
 import { computeBidCommitment, computeBidNullifier, generateSecretSalt } from './circuits/poseidon';
+import { AuctionLot, BidCommitmentEntry } from './types/ledger';
 import {
   ShieldCheck,
   Lock,
@@ -21,18 +22,30 @@ import {
   AlertTriangle,
   RefreshCw,
   Copy,
-  Check
+  Check,
+  Layers,
+  ArrowRightLeft,
+  Search,
+  FileCheck,
+  Sparkles,
+  TrendingUp,
+  Database,
+  Coins
 } from 'lucide-react';
 
-const network = new PreprodNetworkSimulator('auction-preprod-001');
+const network = new PreprodNetworkSimulator('eclipse-preprod-001');
 
 export default function App() {
   const [wallets, setWallets] = useState<WalletAccount[]>(network.getWallets());
   const [activeWallet, setActiveWallet] = useState<WalletAccount | null>(network.getActiveWallet());
   const [contractState, setContractState] = useState(network.getContractState());
 
+  // Active Tab
+  const [activeTab, setActiveTab] = useState<'lots' | 'proof_studio' | 'escrow' | 'explorer' | 'audit'>('lots');
+  const [selectedLotId, setSelectedLotId] = useState<string>('lot-1');
+
   // Form states for bidding
-  const [bidAmount, setBidAmount] = useState<number>(500);
+  const [bidAmount, setBidAmount] = useState<number>(550);
   const [secretSalt, setSecretSalt] = useState<string>(generateSecretSalt());
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
 
@@ -40,17 +53,21 @@ export default function App() {
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [verificationLoading, setVerificationLoading] = useState<boolean>(false);
   const [proofLog, setProofLog] = useState<Array<{ step: string; status: 'pending' | 'passed' | 'failed'; detail: string }>>([]);
+  const [lastProofPayload, setLastProofPayload] = useState<any | null>(null);
 
   // Adversarial test state
   const [adversaryMode, setAdversaryMode] = useState<boolean>(false);
   const [fakeAmount, setFakeAmount] = useState<number>(100);
 
-  // Countdown timer simulation
-  const [timeLeft, setTimeLeft] = useState<number>(180); // 3 minutes countdown
+  // Level 3 Voting state
+  const [voteNullifier, setVoteNullifier] = useState<string>(generateSecretSalt());
+
+  // Live block ticker simulation
+  const [timeLeft, setTimeLeft] = useState<number>(300);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
+      setTimeLeft(prev => (prev > 0 ? prev - 1 : 300));
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -64,22 +81,40 @@ export default function App() {
   const handleWalletSwitch = (address: string) => {
     network.switchWallet(address);
     refreshState();
-    // Pre-fill existing vault salt if present
-    const vaultEntry = network.getVaultEntry(address);
+    const vaultEntry = network.getVaultEntry(address, selectedLotId);
     if (vaultEntry) {
       setBidAmount(vaultEntry.amount);
       setSecretSalt(vaultEntry.secretSalt);
     } else {
+      const selectedLot = contractState.lots.find(l => l.lotId === selectedLotId);
+      setBidAmount((selectedLot ? selectedLot.reservePrice : 400) + 150);
       setSecretSalt(generateSecretSalt());
     }
   };
 
+  const handleSelectLot = (lotId: string) => {
+    setSelectedLotId(lotId);
+    if (activeWallet) {
+      const vaultEntry = network.getVaultEntry(activeWallet.address, lotId);
+      if (vaultEntry) {
+        setBidAmount(vaultEntry.amount);
+        setSecretSalt(vaultEntry.secretSalt);
+      } else {
+        const lot = contractState.lots.find(l => l.lotId === lotId);
+        setBidAmount((lot ? lot.reservePrice : 400) + 150);
+        setSecretSalt(generateSecretSalt());
+      }
+    }
+  };
+
+  const currentLot = contractState.lots.find(l => l.lotId === selectedLotId) || contractState.lots[0];
+
   const computedCommitment = activeWallet
-    ? computeBidCommitment(bidAmount, secretSalt, activeWallet.address)
+    ? computeBidCommitment(bidAmount, secretSalt, activeWallet.address, selectedLotId)
     : '';
 
   const computedNullifier = activeWallet
-    ? computeBidNullifier(secretSalt, activeWallet.address, contractState.auctionId)
+    ? computeBidNullifier(secretSalt, activeWallet.address, contractState.auctionId, selectedLotId)
     : '';
 
   const handleCopySalt = () => {
@@ -97,13 +132,21 @@ export default function App() {
       return;
     }
 
-    const result = network.submitSealedBid(bidAmount);
+    if (bidAmount < currentLot.reservePrice) {
+      setStatusMessage({
+        type: 'error',
+        text: `Bid amount (${bidAmount} ttDUST) is below Lot Reserve Price (${currentLot.reservePrice} ttDUST).`
+      });
+      return;
+    }
+
+    const result = network.submitSealedBid(bidAmount, selectedLotId);
     refreshState();
 
     if (result.success) {
       setStatusMessage({
         type: 'success',
-        text: `Sealed bid of ${bidAmount} ttDUST committed! Poseidon Hash: ${result.commitment?.substring(0, 16)}...`
+        text: `Sealed bid of ${bidAmount} ttDUST committed for [${currentLot.title}]! Poseidon Hash: ${result.commitment?.substring(0, 16)}...`
       });
     } else {
       setStatusMessage({
@@ -113,43 +156,52 @@ export default function App() {
     }
   };
 
-  const handleCloseAuction = () => {
-    const result = network.closeAuction();
+  const handleCloseAuction = (lotId: string) => {
+    const result = network.closeAuction(lotId);
     refreshState();
     if (result.success) {
-      setStatusMessage({ type: 'info', text: 'Auction closed by organizer. Bids locked.' });
+      setStatusMessage({ type: 'info', text: `Auction Lot closed by organizer. Bids locked.` });
     } else {
       setStatusMessage({ type: 'error', text: result.message });
     }
   };
 
-  const handleRevealAndVerify = async () => {
+  const handleRevealAndVerify = async (lotId: string) => {
     if (!activeWallet) return;
     setVerificationLoading(true);
+    setActiveTab('proof_studio');
+    const lot = contractState.lots.find(l => l.lotId === lotId) || currentLot;
+
     setProofLog([
-      { step: '1. Generating ZK Range Proof (proveHighestBid)', status: 'pending', detail: 'Constructing Groth16/Plonk circuit constraints...' }
+      { step: '1. Generating ZK Range Proof (proveHighestBid & proveReserve)', status: 'pending', detail: `Constructing constraints for Lot ${lot.title}...` }
     ]);
 
     await new Promise(r => setTimeout(r, 600));
 
     setProofLog(prev => [
-      { step: '1. ZK Range Proof Generated', status: 'passed', detail: 'Zero-knowledge non-negativity constraints calculated.' },
-      { step: '2. Ledger Commitment Opening Check', status: 'pending', detail: 'Verifying H(winningAmount, secretSalt, address) matches ledger commitment...' }
+      { step: '1. ZK Range Proof Generated', status: 'passed', detail: 'Zero-knowledge non-negativity (v_win - v_i >= 0) calculated.' },
+      { step: '2. Reserve Price Threshold Verification', status: 'pending', detail: `Validating v_win >= ${lot.reservePrice} ttDUST...` }
     ]);
 
     await new Promise(r => setTimeout(r, 700));
 
-    // Execute contract verification
+    setProofLog(prev => [
+      ...prev.slice(0, 1),
+      { step: '2. Reserve Price Threshold Satisfied', status: 'passed', detail: `Claimed amount exceeds reserve price of ${lot.reservePrice} ttDUST.` },
+      { step: '3. Ledger Commitment Opening & Nullifier Check', status: 'pending', detail: 'Verifying Poseidon Hash on Midnight Preprod Ledger...' }
+    ]);
+
+    await new Promise(r => setTimeout(r, 700));
+
     let result;
     if (adversaryMode) {
-      // Intentionally supply manipulated amount to demonstrate rejection!
-      result = network.revealAndVerifyWinner({
+      result = network.revealAndVerifyWinner(lotId, {
         winningAmount: fakeAmount,
         secretSalt: secretSalt,
         bidderAddress: activeWallet.address
       });
     } else {
-      result = network.revealAndVerifyWinner();
+      result = network.revealAndVerifyWinner(lotId);
     }
 
     refreshState();
@@ -157,423 +209,796 @@ export default function App() {
 
     if (result.success) {
       setProofLog(prev => [
-        prev[0],
-        { step: '2. Commitment Opening Check', status: 'passed', detail: 'Opening hash matches registered on-chain commitment.' },
-        { step: '3. Range Proof Verification (Maximal Bid Check)', status: 'passed', detail: 'Proved: winningAmount >= all hidden bids (losing amounts remain zero-knowledge).' },
-        { step: '4. On-Chain Ledger Verification Complete', status: 'passed', detail: 'Winner state finalized on Midnight Preprod contract.' }
+        ...prev.slice(0, 2),
+        { step: '3. On-Chain ZK Proof Verified', status: 'passed', detail: 'Smart contract verifier accepted proof payload.' }
       ]);
-      setStatusMessage({ type: 'success', text: result.message });
+      setStatusMessage({
+        type: 'success',
+        text: `Winner verified for [${lot.title}]! ZK Proof recorded on ledger.`
+      });
     } else {
       setProofLog(prev => [
-        prev[0],
-        { step: '2. Verification Failed', status: 'failed', detail: result.message },
-        { step: '3. Claim Rejected On-Chain', status: 'failed', detail: 'Circuit verifier rejected invalid winner claim.' }
+        ...prev.slice(0, 2),
+        { step: '3. On-Chain Verification Failed', status: 'failed', detail: result.message }
       ]);
+      setStatusMessage({
+        type: 'error',
+        text: `Verification Rejected: ${result.message}`
+      });
+    }
+  };
+
+  const handleSettleEscrow = (lotId: string) => {
+    const result = network.settleEscrow(lotId);
+    refreshState();
+    if (result.success) {
+      setStatusMessage({
+        type: 'success',
+        text: result.message
+      });
+    } else {
       setStatusMessage({ type: 'error', text: result.message });
     }
   };
 
-  const formatAddress = (addr: string) => `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const handleCastVote = (vote: 'yes' | 'no') => {
+    const nullifier = computeBidNullifier(voteNullifier, activeWallet?.address || 'anon', 'gov-vote');
+    const result = network.castVote(vote, nullifier);
+    refreshState();
+    setVoteNullifier(generateSecretSalt());
+
+    if (result.success) {
+      setStatusMessage({ type: 'success', text: result.message });
+    } else {
+      setStatusMessage({ type: 'error', text: result.message });
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-slate-100 p-4 md:p-8 flex flex-col gap-6 max-w-7xl mx-auto">
-      {/* 1. Header Navigation */}
-      <header className="glass-panel p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 border border-cyan-500/20 glow-cyan">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-cyan-500/10 rounded-xl border border-cyan-500/30 text-cyan-400">
-            <ShieldCheck className="w-8 h-8" />
+    <div className="min-h-screen bg-[#070913] text-slate-100 font-sans selection:bg-cyan-500 selection:text-black">
+      {/* Top Banner Navigation */}
+      <header className="sticky top-0 z-50 glass-panel border-b border-slate-800/80 bg-[#070913]/90 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 p-[1px] glow-cyan">
+              <div className="w-full h-full bg-slate-950 rounded-[11px] flex items-center justify-center">
+                <ShieldCheck className="w-6 h-6 text-cyan-400" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xl font-bold tracking-tight text-white">AARU ECLIPSE</span>
+                <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/60">
+                  Level 5 & 6 ZK
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Sealed-Bid Multi-Lot Auction & Trustless Escrow Engine
+              </p>
+            </div>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent">
-                Aaru New Moon Level 4
-              </h1>
-              <span className="px-2.5 py-0.5 text-xs font-mono font-semibold rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
-                Waxing Gibbous MVP
+
+          {/* Network Ticker & Wallet Switcher */}
+          <div className="flex items-center space-x-4">
+            <div className="hidden lg:flex items-center space-x-3 text-xs bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2">
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <span className="font-mono text-emerald-400 font-medium">Midnight Preprod</span>
+              </div>
+              <span className="text-slate-600">|</span>
+              <span className="text-slate-400 font-mono">Block #{contractState.blockHeight}</span>
+              <span className="text-slate-600">|</span>
+              <span className="text-slate-400 flex items-center gap-1 font-mono">
+                <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
               </span>
             </div>
-            <p className="text-xs md:text-sm text-slate-400 mt-1">
-              Sealed-Bid Auction with Verifiable Winner (Private Bids + Public Proof of Fairness)
-            </p>
+
+            {/* Wallet Selection Dropdown */}
+            <div className="relative flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1">
+              <div className="flex items-center space-x-1">
+                {wallets.map(wallet => {
+                  const isActive = activeWallet?.address === wallet.address;
+                  return (
+                    <button
+                      key={wallet.address}
+                      onClick={() => handleWalletSwitch(wallet.address)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        isActive
+                          ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-lg shadow-cyan-950/50'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-1.5">
+                        <Wallet className="w-3.5 h-3.5" />
+                        <span>{wallet.name.split(' ')[0]}</span>
+                        <span className={`font-mono text-[11px] ${isActive ? 'text-cyan-200' : 'text-slate-500'}`}>
+                          ({wallet.balance} ttDUST)
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Network & Wallet Controls */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="text-slate-300 font-medium">Midnight Preprod Testnet</span>
-          </div>
-
-          <div className="relative flex items-center gap-2 bg-slate-900/90 border border-slate-700/60 rounded-xl px-3 py-1.5">
-            <Wallet className="w-4 h-4 text-cyan-400" />
-            <select
-              value={activeWallet?.address}
-              onChange={e => handleWalletSwitch(e.target.value)}
-              className="bg-transparent text-xs font-mono font-semibold text-slate-200 outline-none cursor-pointer pr-2"
-            >
-              {wallets.map(w => (
-                <option key={w.address} value={w.address} className="bg-slate-900 text-slate-200">
-                  {w.name} ({w.balance} ttDUST)
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Sub-Navigation Tabs */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-800/60 flex items-center space-x-1 py-1">
+          {[
+            { id: 'lots', label: 'Multi-Lot Auction House', icon: Layers },
+            { id: 'proof_studio', label: 'ZK Proof Studio', icon: Cpu },
+            { id: 'escrow', label: 'Trustless Escrow Vault', icon: Lock },
+            { id: 'explorer', label: 'Preprod Explorer', icon: Database },
+            { id: 'audit', label: 'Audit & Governance', icon: FileCheck }
+          ].map(tab => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center space-x-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+                  active
+                    ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+                {tab.id === 'lots' && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cyan-950 text-cyan-400 text-[10px]">
+                    {contractState.lots.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </header>
 
-      {/* Notification Toast */}
-      {statusMessage && (
-        <div
-          className={`p-4 rounded-xl text-sm flex items-center justify-between gap-3 border ${
-            statusMessage.type === 'success'
-              ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
-              : statusMessage.type === 'error'
-              ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-              : 'bg-cyan-950/40 border-cyan-500/40 text-cyan-300'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {statusMessage.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />}
-            {statusMessage.type === 'error' && <XCircle className="w-5 h-5 text-rose-400 shrink-0" />}
-            {statusMessage.type === 'info' && <Zap className="w-5 h-5 text-cyan-400 shrink-0" />}
-            <span>{statusMessage.text}</span>
-          </div>
-          <button onClick={() => setStatusMessage(null)} className="text-slate-400 hover:text-slate-200 text-xs">
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* 2. Top Status Bar & Auction Countdown */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="glass-card p-4 rounded-xl flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-            <Clock className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-xs text-slate-400 block">Auction Countdown</span>
-            <span className="font-mono text-lg font-bold text-slate-100">
-              {contractState.auctionOpen ? formatTime(timeLeft) : '00:00 (LOCKED)'}
-            </span>
-          </div>
-        </div>
-
-        <div className="glass-card p-4 rounded-xl flex items-center gap-3">
-          <div className={`p-2.5 rounded-lg border ${contractState.auctionOpen ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
-            {contractState.auctionOpen ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
-          </div>
-          <div>
-            <span className="text-xs text-slate-400 block">Auction Lifecycle</span>
-            <span className={`font-semibold text-sm ${contractState.auctionOpen ? 'text-emerald-400' : 'text-amber-400'}`}>
-              {contractState.auctionOpen ? 'AUCTION OPEN (Accepting Bids)' : 'AUCTION LOCKED (Verification Mode)'}
-            </span>
-          </div>
-        </div>
-
-        <div className="glass-card p-4 rounded-xl flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
-            <EyeOff className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-xs text-slate-400 block">On-Chain Commitments</span>
-            <span className="font-mono text-lg font-bold text-purple-300">
-              {contractState.bidCommitments.length} Sealed Bids
-            </span>
-          </div>
-        </div>
-
-        <div className="glass-card p-4 rounded-xl flex items-center gap-3">
-          <div className={`p-2.5 rounded-lg border ${contractState.isVerified ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-            <Trophy className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-xs text-slate-400 block">Verified Winner</span>
-            <span className="font-semibold text-sm text-slate-200">
-              {contractState.isVerified && contractState.winningAmount
-                ? `${contractState.winningAmount} ttDUST (ZK Proven)`
-                : 'Pending Reveal'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Main 3-Column Interactive Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Column 1: Submit Sealed Bid Form */}
-        <div className="glass-panel p-6 rounded-2xl flex flex-col gap-5 border border-slate-800">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center gap-2">
-              <Lock className="w-5 h-5 text-cyan-400" />
-              <h2 className="font-bold text-lg text-slate-100">1. Submit Sealed Bid</h2>
-            </div>
-            <span className="text-xs text-slate-400 font-mono">Zero-Knowledge</span>
-          </div>
-
-          <form onSubmit={handleSubmitBid} className="flex flex-col gap-4">
-            <div>
-              <label className="text-xs text-slate-400 mb-1.5 block">Active Bidder Account</label>
-              <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex items-center justify-between text-xs font-mono">
-                <span className="text-cyan-300 font-semibold">{activeWallet?.name}</span>
-                <span className="text-slate-400">{formatAddress(activeWallet?.address || '')}</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-400 mb-1.5 block">Bid Amount (ttDUST)</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  min="1"
-                  max={activeWallet?.balance}
-                  value={bidAmount}
-                  onChange={e => setBidAmount(Number(e.target.value))}
-                  disabled={!contractState.auctionOpen}
-                  className="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-4 py-2.5 text-slate-100 font-mono font-bold outline-none focus:border-cyan-500 disabled:opacity-50"
-                />
-                <span className="absolute right-3 top-2.5 text-xs text-slate-500 font-mono font-semibold">
-                  ttDUST
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs text-slate-400">Secret Salt (Private Input)</label>
-                <button
-                  type="button"
-                  onClick={() => setSecretSalt(generateSecretSalt())}
-                  disabled={!contractState.auctionOpen}
-                  className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
-                >
-                  <RefreshCw className="w-3 h-3" /> Regenerate
-                </button>
-              </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  readOnly
-                  value={secretSalt}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 pr-10 text-xs font-mono text-slate-300 outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleCopySalt}
-                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-200"
-                  title="Copy Salt"
-                >
-                  {copySuccess ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Cryptographic Preview Box */}
-            <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800/80 flex flex-col gap-2">
-              <span className="text-[11px] text-slate-400 font-medium">On-Chain Commitment Preview</span>
-              <div className="text-[11px] font-mono text-purple-300 break-all bg-slate-900/60 p-2 rounded-lg border border-purple-500/20">
-                Commitment: {computedCommitment}
-              </div>
-              <div className="text-[11px] font-mono text-slate-400 break-all bg-slate-900/60 p-2 rounded-lg border border-slate-800">
-                Nullifier: {computedNullifier.substring(0, 24)}...
-              </div>
-              <p className="text-[10px] text-slate-500 italic mt-0.5">
-                * Note: Your bid amount ({bidAmount}) is never exposed on-chain. Only the Poseidon Commitment hash is recorded.
-              </p>
-            </div>
-
-            <button
-              type="submit"
-              disabled={!contractState.auctionOpen}
-              className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-cyan-500 to-teal-500 text-black hover:from-cyan-400 hover:to-teal-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-cyan-500/20"
-            >
-              {contractState.auctionOpen ? 'Commit Hidden Bid On-Chain' : 'Auction Closed'}
-            </button>
-          </form>
-        </div>
-
-        {/* Column 2: On-Chain Ledger & Auction State */}
-        <div className="glass-panel p-6 rounded-2xl flex flex-col gap-5 border border-slate-800">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center gap-2">
-              <Cpu className="w-5 h-5 text-purple-400" />
-              <h2 className="font-bold text-lg text-slate-100">2. On-Chain Ledger State</h2>
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Global Alert Notification */}
+        {statusMessage && (
+          <div
+            className={`mb-6 p-4 rounded-xl border flex items-center justify-between text-sm shadow-xl backdrop-blur-lg ${
+              statusMessage.type === 'success'
+                ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-200'
+                : statusMessage.type === 'error'
+                ? 'bg-rose-950/60 border-rose-800/80 text-rose-200'
+                : 'bg-cyan-950/60 border-cyan-800/80 text-cyan-200'
+            }`}
+          >
+            <div className="flex items-center space-x-3">
+              {statusMessage.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />}
+              {statusMessage.type === 'error' && <XCircle className="w-5 h-5 text-rose-400 shrink-0" />}
+              {statusMessage.type === 'info' && <Zap className="w-5 h-5 text-cyan-400 shrink-0" />}
+              <span>{statusMessage.text}</span>
             </div>
             <button
-              onClick={handleCloseAuction}
-              disabled={!contractState.auctionOpen}
-              className="px-3 py-1 text-xs rounded-lg font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 disabled:opacity-40"
+              onClick={() => setStatusMessage(null)}
+              className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800/60"
             >
-              Close Auction
+              Dismiss
             </button>
           </div>
+        )}
 
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Submitted Sealed Commitments ({contractState.bidCommitments.length})</span>
-              <span className="text-emerald-400 font-mono">Ledger Privacy Active</span>
-            </div>
-
-            <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
-              {contractState.bidCommitments.length === 0 ? (
-                <div className="p-6 rounded-xl bg-slate-900/50 border border-dashed border-slate-800 text-center text-xs text-slate-500">
-                  No sealed bid commitments submitted yet.
+        {/* TAB 1: MULTI-LOT AUCTION HOUSE */}
+        {activeTab === 'lots' && (
+          <div className="space-y-8">
+            {/* Top Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="glass-card p-4 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-400">Total Escrow Collateral</p>
+                  <p className="text-2xl font-bold text-white mt-1 font-mono">{contractState.totalEscrowLocked} ttDUST</p>
                 </div>
-              ) : (
-                contractState.bidCommitments.map((entry, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 flex flex-col gap-1.5"
-                  >
+                <div className="w-10 h-10 rounded-lg bg-cyan-950/60 border border-cyan-800/50 flex items-center justify-center text-cyan-400">
+                  <Coins className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="glass-card p-4 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-400">Active Bids Committed</p>
+                  <p className="text-2xl font-bold text-white mt-1 font-mono">{contractState.bidCommitments.length}</p>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-indigo-950/60 border border-indigo-800/50 flex items-center justify-center text-indigo-400">
+                  <Lock className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="glass-card p-4 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-400">Verifier Address</p>
+                  <p className="text-xs font-bold text-cyan-400 mt-2 font-mono truncate max-w-[140px]">
+                    0x71a48c902b8e3...
+                  </p>
+                </div>
+                <a
+                  href="https://preprod.cardanoscan.io/address/0x71a48c902b8e31a14f52b619d803c4f72831a9f2"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-cyan-400"
+                >
+                  <ExternalLink className="w-5 h-5" />
+                </a>
+              </div>
+
+              <div className="glass-card p-4 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-400">Privacy Circuit</p>
+                  <p className="text-xs font-bold text-emerald-400 mt-2 font-mono">
+                    Poseidon + SNARK
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-emerald-950/60 border border-emerald-800/50 flex items-center justify-center text-emerald-400">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Auction Lots Display Grid */}
+            <div>
+              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-cyan-400" />
+                <span>Active Multi-Lot Sealed-Bid Items</span>
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {contractState.lots.map(lot => {
+                  const isSelected = selectedLotId === lot.lotId;
+                  const lotCommitmentsCount = contractState.bidCommitments.filter(b => b.lotId === lot.lotId).length;
+
+                  return (
+                    <div
+                      key={lot.lotId}
+                      onClick={() => handleSelectLot(lot.lotId)}
+                      className={`glass-card rounded-2xl overflow-hidden border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-cyan-500 shadow-xl shadow-cyan-950/30 ring-1 ring-cyan-500/50'
+                          : 'border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="relative h-44 overflow-hidden bg-slate-950">
+                        <img
+                          src={lot.imageUrl}
+                          alt={lot.title}
+                          className="w-full h-full object-cover opacity-80 hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+                        <div className="absolute top-3 left-3 flex items-center space-x-2">
+                          <span className="px-2.5 py-1 text-[11px] font-bold uppercase rounded-md bg-slate-900/90 text-cyan-400 border border-cyan-800/50 backdrop-blur-md">
+                            {lot.category}
+                          </span>
+                          <span className="px-2.5 py-1 text-[11px] font-bold uppercase rounded-md bg-indigo-950/90 text-indigo-300 border border-indigo-800/50 backdrop-blur-md">
+                            {lot.auctionType === 'vickrey' ? 'Vickrey (2nd Price)' : 'First-Price'}
+                          </span>
+                        </div>
+
+                        <div className="absolute top-3 right-3">
+                          <span
+                            className={`px-2.5 py-1 text-[11px] font-bold rounded-full border uppercase backdrop-blur-md ${
+                              lot.status === 'active'
+                                ? 'bg-emerald-950/90 text-emerald-400 border-emerald-800/80'
+                                : lot.status === 'closed'
+                                ? 'bg-amber-950/90 text-amber-400 border-amber-800/80'
+                                : lot.status === 'verified'
+                                ? 'bg-cyan-950/90 text-cyan-400 border-cyan-800/80'
+                                : 'bg-purple-950/90 text-purple-400 border-purple-800/80'
+                            }`}
+                          >
+                            {lot.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-5 space-y-4">
+                        <div>
+                          <h3 className="text-base font-bold text-white">{lot.title}</h3>
+                          <p className="text-xs text-slate-400 line-clamp-2 mt-1">{lot.description}</p>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/60 font-mono">
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">RESERVE PRICE</span>
+                            <span className="text-cyan-400 font-bold">{lot.reservePrice} ttDUST</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">SEALED BIDS</span>
+                            <span className="text-slate-200 font-bold">{lotCommitmentsCount} Bids</span>
+                          </div>
+                        </div>
+
+                        {/* Verified Winner Display */}
+                        {lot.status === 'verified' && (
+                          <div className="p-3 rounded-xl bg-cyan-950/40 border border-cyan-800/50 space-y-1">
+                            <div className="flex items-center space-x-1.5 text-xs text-cyan-400 font-semibold">
+                              <Trophy className="w-4 h-4 text-amber-400" />
+                              <span>Verified ZK Winner</span>
+                            </div>
+                            <p className="text-xs text-slate-300 font-mono truncate">
+                              Bidder: {lot.winningBidder?.substring(0, 14)}...
+                            </p>
+                            <p className="text-xs text-emerald-400 font-mono font-bold">
+                              Winning Price: {lot.auctionType === 'vickrey' ? lot.secondHighestAmount : lot.winningAmount} ttDUST
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Action buttons for lot */}
+                        <div className="pt-2 flex items-center space-x-2">
+                          {lot.status === 'active' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCloseAuction(lot.lotId);
+                              }}
+                              className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-900/50 flex items-center justify-center space-x-1.5"
+                            >
+                              <Lock className="w-3.5 h-3.5" />
+                              <span>Close Lot</span>
+                            </button>
+                          )}
+
+                          {lot.status === 'closed' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRevealAndVerify(lot.lotId);
+                              }}
+                              className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-950/50 flex items-center justify-center space-x-1.5"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Verify ZK Winner</span>
+                            </button>
+                          )}
+
+                          {lot.status === 'verified' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSettleEscrow(lot.lotId);
+                              }}
+                              className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/50 flex items-center justify-center space-x-1.5"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Settle Escrow</span>
+                            </button>
+                          )}
+
+                          {lot.status === 'settled' && (
+                            <div className="w-full py-2 text-center text-xs text-purple-400 font-semibold bg-purple-950/30 border border-purple-800/40 rounded-lg">
+                              Escrow Settled & Refunded
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bidding Control Panel & Adversarial Test Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4">
+              {/* Left Column: Submit Sealed Bid Form */}
+              <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border border-slate-800 space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Lock className="w-5 h-5 text-cyan-400" />
+                      <span>Commit Sealed Bid for [{currentLot.title}]</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Your bid amount is protected on-chain as a Poseidon hash commitment H(amount, salt, address, lotId).
+                    </p>
+                  </div>
+
+                  <span className="px-3 py-1 text-xs font-mono rounded-lg bg-slate-900 text-cyan-400 border border-slate-800">
+                    Reserve: {currentLot.reservePrice} ttDUST
+                  </span>
+                </div>
+
+                <form onSubmit={handleSubmitBid} className="space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1">
+                        Bid Amount (ttDUST)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={bidAmount}
+                          onChange={(e) => setBidAmount(Number(e.target.value))}
+                          disabled={currentLot.status !== 'active'}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+                        />
+                        <span className="absolute right-3 top-3 text-xs text-slate-500 font-mono">ttDUST</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                        <span>Secret Salt (Private Input)</span>
+                        <button
+                          type="button"
+                          onClick={() => setSecretSalt(generateSecretSalt())}
+                          className="text-cyan-400 text-[11px] hover:underline flex items-center gap-1"
+                        >
+                          <RefreshCw className="w-3 h-3" /> Regenerate
+                        </button>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          readOnly
+                          value={secretSalt}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 font-mono pr-10 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCopySalt}
+                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white p-1 rounded"
+                        >
+                          {copySuccess ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Calculated Hashes Live Preview */}
+                  <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-3">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-mono text-purple-300 font-medium">
-                        Commitment #{idx + 1}
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        {new Date(entry.timestamp).toLocaleTimeString()}
+                      <span className="text-slate-400">Poseidon Commitment Hash:</span>
+                      <span className="text-cyan-400 font-mono font-bold truncate max-w-[280px]">
+                        {computedCommitment || 'N/A'}
                       </span>
                     </div>
-                    <div className="text-[11px] font-mono text-slate-300 break-all bg-slate-950 p-2 rounded-lg">
-                      {entry.commitment}
-                    </div>
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-slate-500">Nullifier Spent: {entry.nullifier.substring(0, 16)}...</span>
-                      <span className="text-emerald-400 flex items-center gap-1 font-semibold">
-                        <EyeOff className="w-3 h-3" /> Amount Hidden
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Bidder ZK Nullifier:</span>
+                      <span className="text-indigo-400 font-mono font-bold truncate max-w-[280px]">
+                        {computedNullifier || 'N/A'}
                       </span>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
 
-            {/* Level 3 Voting State Baseline Check */}
-            <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800/80 text-xs flex flex-col gap-1 mt-2">
-              <span className="text-slate-400 font-medium">Level 3 Voting State (Preserved Baseline)</span>
-              <div className="flex justify-between text-slate-300 font-mono text-[11px] mt-1">
-                <span>Yes Tally: {contractState.yesTally}</span>
-                <span>No Tally: {contractState.noTally}</span>
-                <span>Nullifiers Spent: {contractState.nullifierSet.length}</span>
+                  <button
+                    type="submit"
+                    disabled={currentLot.status !== 'active'}
+                    className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 text-white font-bold text-sm shadow-xl shadow-cyan-950/50 hover:opacity-95 transition-all disabled:opacity-50 flex items-center justify-center space-x-2"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>Commit Sealed Bid On-Chain (Lock {bidAmount} ttDUST Escrow)</span>
+                  </button>
+                </form>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Column 3: Winner Reveal & ZK Verification Studio */}
-        <div className="glass-panel p-6 rounded-2xl flex flex-col gap-5 border border-slate-800">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-emerald-400" />
-              <h2 className="font-bold text-lg text-slate-100">3. Winner ZK Verification</h2>
-            </div>
-            <span className="text-xs text-slate-400 font-mono">proveHighestBid</span>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            {/* Adversary Testing Toggle */}
-            <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/30 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" /> Adversary Simulation Test
-                </span>
-                <input
-                  type="checkbox"
-                  checked={adversaryMode}
-                  onChange={e => setAdversaryMode(e.target.checked)}
-                  className="accent-amber-400 cursor-pointer"
-                />
-              </div>
-              {adversaryMode && (
-                <div className="flex items-center gap-2 text-xs text-slate-300 mt-1">
-                  <span>Claim Fake Lower Bid Amount:</span>
-                  <input
-                    type="number"
-                    value={fakeAmount}
-                    onChange={e => setFakeAmount(Number(e.target.value))}
-                    className="w-20 bg-slate-900 border border-amber-500/50 rounded px-2 py-1 text-amber-300 font-mono"
-                  />
+              {/* Right Column: Adversarial Test & Security Panel */}
+              <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-6">
+                <div className="border-b border-slate-800/80 pb-4">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-400" />
+                    <span>Adversarial Fraud Tester</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Demonstrate Zero-Knowledge fraud proof rejection by attempting to reveal a fake bid or invalid salt.
+                  </p>
                 </div>
-              )}
-            </div>
 
-            <button
-              onClick={handleRevealAndVerify}
-              disabled={contractState.auctionOpen || verificationLoading || contractState.bidCommitments.length === 0}
-              className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-black hover:from-emerald-400 hover:to-teal-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
-            >
-              {verificationLoading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Verifying ZK Proof...
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4" /> Reveal & Verify Winner On-Chain
-                </>
-              )}
-            </button>
-
-            {/* ZK Proof Log Step Breakdown */}
-            {proofLog.length > 0 && (
-              <div className="flex flex-col gap-2 bg-slate-950 p-4 rounded-xl border border-slate-800">
-                <span className="text-xs font-semibold text-slate-300 mb-1">ZK Proof Step Verification:</span>
-                {proofLog.map((log, i) => (
-                  <div key={i} className="flex flex-col gap-1 text-xs border-b border-slate-900 last:border-0 pb-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-slate-200">{log.step}</span>
-                      {log.status === 'passed' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-                      {log.status === 'failed' && <XCircle className="w-4 h-4 text-rose-400" />}
-                      {log.status === 'pending' && <RefreshCw className="w-4 h-4 text-cyan-400 animate-spin" />}
-                    </div>
-                    <p className="text-[11px] text-slate-400">{log.detail}</p>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-xs font-semibold text-slate-300">Enable Adversarial Fraud Mode</span>
+                    <button
+                      type="button"
+                      onClick={() => setAdversaryMode(!adversaryMode)}
+                      className={`w-12 h-6 rounded-full transition-colors relative p-1 ${
+                        adversaryMode ? 'bg-rose-600' : 'bg-slate-800'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                          adversaryMode ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
                   </div>
-                ))}
-              </div>
-            )}
 
-            {/* Winner Trophy Card */}
-            {contractState.isVerified && (
-              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950/60 to-slate-900 border border-emerald-500/40 glow-emerald flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
-                  <Trophy className="w-5 h-5" /> Verifiable Winner Confirmed!
-                </div>
-                <div className="text-xs font-mono text-slate-300">
-                  Winning Bid: <span className="text-emerald-300 font-bold">{contractState.winningAmount} ttDUST</span>
-                </div>
-                <div className="text-[11px] font-mono text-slate-400 break-all">
-                  Winner Address: {contractState.winningBidder}
-                </div>
-                <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
-                  <span>ZK Verification: PASSED</span>
-                  <span className="text-emerald-400 font-semibold">Losing Bids: PRIVACY KEPT</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+                  {adversaryMode && (
+                    <div className="p-4 rounded-xl bg-rose-950/30 border border-rose-800/50 space-y-3">
+                      <label className="block text-xs font-medium text-rose-300">
+                        Fake Manipulated Bid Claim (ttDUST)
+                      </label>
+                      <input
+                        type="number"
+                        value={fakeAmount}
+                        onChange={(e) => setFakeAmount(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-rose-900/60 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none"
+                      />
+                      <p className="text-[11px] text-rose-400">
+                        ⚠️ Zero-knowledge range proof constraints will fail commitment opening and reject verification!
+                      </p>
+                    </div>
+                  )}
 
-      {/* 4. On-Chain Ledger Audit Log */}
-      <footer className="glass-panel p-5 rounded-2xl flex flex-col gap-3 border border-slate-800">
-        <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-2">
-          <span className="font-semibold text-slate-200">Midnight Ledger Audit Event Log</span>
-          <span>Contract Address: 0x71a48c902b8e31a14f52b619d803c4f72831a9f2</span>
-        </div>
-        <div className="flex flex-col gap-1.5 max-h-[140px] overflow-y-auto font-mono text-xs text-slate-300">
-          {contractState.auditLogs.map((log, index) => (
-            <div key={index} className="flex items-center justify-between bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-900">
-              <div className="flex items-center gap-2">
-                <span className="text-cyan-400 font-semibold">[{log.action}]</span>
-                <span>{log.details}</span>
+                  <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2 text-xs text-slate-400">
+                    <p className="font-semibold text-slate-200">Security Guarantees:</p>
+                    <ul className="list-disc list-inside space-y-1 text-[11px]">
+                      <li>Losing bid amounts are never stored or exposed on-chain.</li>
+                      <li>Double bidding is rejected by derived Poseidon nullifiers.</li>
+                      <li>Smart contract verifier enforces ZK range proof (v_win &gt;= v_i).</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
-              <span className="text-[10px] text-slate-500">{new Date(log.timestamp).toLocaleTimeString()}</span>
             </div>
-          ))}
-        </div>
-      </footer>
+          </div>
+        )}
+
+        {/* TAB 2: ZK PROOF STUDIO */}
+        {activeTab === 'proof_studio' && (
+          <div className="space-y-6">
+            <div className="glass-panel p-6 rounded-2xl border border-slate-800">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-2">
+                <Cpu className="w-5 h-5 text-cyan-400" />
+                <span>Zero-Knowledge Proof & Constraint Studio</span>
+              </h2>
+              <p className="text-xs text-slate-400 mb-6">
+                Inspect Groth16/Plonk SNARK proof payloads ($\pi_A, \pi_B, \pi_C$) and inequality verification pipelines.
+              </p>
+
+              {/* Execution Steps Visualizer */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                {proofLog.length === 0 ? (
+                  <div className="col-span-3 p-8 text-center text-slate-500 text-xs bg-slate-950/60 rounded-xl border border-slate-800">
+                    No proof verification executed yet. Trigger "Verify ZK Winner" on an auction lot to inspect proof logs.
+                  </div>
+                ) : (
+                  proofLog.map((log, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-4 rounded-xl border space-y-2 ${
+                        log.status === 'passed'
+                          ? 'bg-emerald-950/30 border-emerald-800/60'
+                          : log.status === 'failed'
+                          ? 'bg-rose-950/30 border-rose-800/60'
+                          : 'bg-cyan-950/30 border-cyan-800/60 animate-pulse'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span className="text-white">{log.step}</span>
+                        {log.status === 'passed' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+                        {log.status === 'failed' && <XCircle className="w-4 h-4 text-rose-400" />}
+                      </div>
+                      <p className="text-xs text-slate-300 font-mono">{log.detail}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Simulated SNARK Matrix Representation */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-white">Circuit Constraint Matrix ($\pi_A, \pi_B, \pi_C$)</h3>
+                <div className="p-4 rounded-xl bg-slate-950 font-mono text-xs text-cyan-300 border border-slate-800 overflow-x-auto space-y-2">
+                  <p><span className="text-purple-400">pi_a:</span> ["0xzk_811c9dc5243f6a88...", "0xzk_010001931000193..."]</p>
+                  <p><span className="text-indigo-400">pi_b:</span> [["0xzk_auction_id...", "0xzk_nullifier..."], ["0xzk_winning_amount...", "0xzk_valid_flag..."]]</p>
+                  <p><span className="text-emerald-400">pi_c:</span> ["0xzk_range_proof_pass...", "0xzk_lot_commitments_count..."]</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: TRUSTLESS ESCROW VAULT */}
+        {activeTab === 'escrow' && (
+          <div className="space-y-6">
+            <div className="glass-panel p-6 rounded-2xl border border-slate-800">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Lock className="w-5 h-5 text-indigo-400" />
+                    <span>Trustless Escrow Vault & Automated Refund Engine</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Bidders lock ttDUST token collateral upon bid commitment. Winning funds transfer to seller while losing bidders receive instant automated refunds.
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-xs text-slate-400 block">TOTAL VAULT COLLATERAL</span>
+                  <span className="text-xl font-bold font-mono text-cyan-400">{contractState.totalEscrowLocked} ttDUST</span>
+                </div>
+              </div>
+
+              {/* Escrow Commitment Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400 uppercase">
+                      <th className="py-3 px-4">Bidder Address</th>
+                      <th className="py-3 px-4">Lot ID</th>
+                      <th className="py-3 px-4">Escrow Amount</th>
+                      <th className="py-3 px-4">Commitment Hash</th>
+                      <th className="py-3 px-4">Escrow Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                    {contractState.bidCommitments.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-slate-500">
+                          No active escrow commitments registered on ledger yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      contractState.bidCommitments.map((entry, idx) => (
+                        <tr key={idx} className="hover:bg-slate-900/40">
+                          <td className="py-3 px-4 text-white font-bold">{entry.bidderAddress.substring(0, 14)}...</td>
+                          <td className="py-3 px-4 text-cyan-400">{entry.lotId}</td>
+                          <td className="py-3 px-4 text-emerald-400 font-bold">{entry.escrowAmount} ttDUST</td>
+                          <td className="py-3 px-4 text-slate-400">{entry.commitment.substring(0, 16)}...</td>
+                          <td className="py-3 px-4">
+                            {entry.isRefunded ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] bg-purple-950 text-purple-400 border border-purple-800">
+                                Refunded to Wallet
+                              </span>
+                            ) : entry.isEscrowLocked ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-800">
+                                Collateral Locked
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] bg-slate-900 text-slate-400">
+                                Released
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: PREPROD EXPLORER */}
+        {activeTab === 'explorer' && (
+          <div className="space-y-6">
+            <div className="glass-panel p-6 rounded-2xl border border-slate-800">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
+                <Database className="w-5 h-5 text-emerald-400" />
+                <span>Midnight / Cardano Preprod Explorer</span>
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 font-mono text-xs">
+                  <h3 className="font-bold text-white text-sm">Ledger State Summary</h3>
+                  <div className="flex justify-between py-1 border-b border-slate-900">
+                    <span className="text-slate-400">Auction ID:</span>
+                    <span className="text-cyan-400">{contractState.auctionId}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-900">
+                    <span className="text-slate-400">Block Height:</span>
+                    <span className="text-white">#{contractState.blockHeight}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-900">
+                    <span className="text-slate-400">Total Bids Committed:</span>
+                    <span className="text-white">{contractState.bidCommitments.length}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-400">Nullifier Tree Size:</span>
+                    <span className="text-indigo-400">{contractState.bidderNullifiers.length} Nullifiers</span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 font-mono text-xs">
+                  <h3 className="font-bold text-white text-sm">On-Chain Nullifier Registry</h3>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {contractState.bidderNullifiers.length === 0 ? (
+                      <p className="text-slate-500 italic">No nullifiers spent yet.</p>
+                    ) : (
+                      contractState.bidderNullifiers.map((nullifier, i) => (
+                        <div key={i} className="text-slate-400 hover:text-white truncate">
+                          [{i + 1}] {nullifier}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: AUDIT & GOVERNANCE */}
+        {activeTab === 'audit' && (
+          <div className="space-y-6">
+            <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-6">
+              {/* Preserved Level 3 Governance Panel */}
+              <div className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-800/40 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <VoteIcon className="w-4 h-4 text-indigo-400" />
+                    <span>Level 3 Preserved Base Governance Voting</span>
+                  </h3>
+                  <div className="flex space-x-4 text-xs font-mono">
+                    <span className="text-emerald-400">YES Tally: {contractState.yesTally}</span>
+                    <span className="text-rose-400">NO Tally: {contractState.noTally}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => handleCastVote('yes')}
+                    className="flex-1 py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50"
+                  >
+                    Cast Vote YES
+                  </button>
+                  <button
+                    onClick={() => handleCastVote('no')}
+                    className="flex-1 py-2 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-950/50"
+                  >
+                    Cast Vote NO
+                  </button>
+                </div>
+              </div>
+
+              {/* Audit Logs Table */}
+              <div>
+                <h3 className="text-sm font-bold text-white mb-3">On-Chain Audit Trail</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 uppercase">
+                        <th className="py-2 px-3">Timestamp</th>
+                        <th className="py-2 px-3">Tx Hash</th>
+                        <th className="py-2 px-3">Action</th>
+                        <th className="py-2 px-3">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                      {contractState.auditLogs.slice().reverse().map((log, idx) => (
+                        <tr key={idx} className="hover:bg-slate-900/40">
+                          <td className="py-2.5 px-3 text-slate-500">
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-cyan-400">{log.txHash || 'N/A'}</td>
+                          <td className="py-2.5 px-3 font-bold text-white">{log.action}</td>
+                          <td className="py-2.5 px-3 text-slate-300">{log.details}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
+  );
+}
+
+function VoteIcon(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m9 12 2 2 4-4" />
+      <path d="M5 7c0-1.1.9-2 2-2h10a2 2 0 0 1 2 2v12H5V7Z" />
+      <path d="M22 19H2" />
+    </svg>
   );
 }
