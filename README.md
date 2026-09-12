@@ -71,7 +71,57 @@ Traditional auctions force participants to choose between public bidding (exposi
 - **Token Symbol:** `ttDUST` (Midnight Testnet Token)
 
 ---
-## Screenshot ##
+
+## 5. Midnight Smart Contracts Source Code (`/contracts`)
+
+This repository includes native **Compact smart contract source code** written for the Midnight Network ZK privacy sidechain:
+
+- [`contracts/SealedBidAuction.compact`](contracts/SealedBidAuction.compact): Primary Midnight Compact contract with ZK Poseidon commitments, nullifier tracking, reserve price circuits (`prove_highest_bid_and_reserve`), and multi-lot state transitions.
+- [`contracts/TrustlessEscrow.compact`](contracts/TrustlessEscrow.compact): Trustless `ttDUST` token escrow vault manager contract handling collateral deposits, winner payouts, and automated losing bidder refunds.
+- [`contracts/README.md`](contracts/README.md): Detailed specification, circuit parameters, and compilation guide using `@midnight-ntwrk/compactc`.
+
+---
+
+## 6. Directory Architecture & Modular Design
+
+```
+New-Moon-Level4/
+├── contracts/                        # Midnight Compact ZK Smart Contract Source Files
+│   ├── SealedBidAuction.compact     # Multi-lot ZK sealed-bid auction contract
+│   ├── TrustlessEscrow.compact      # Escrow vault & auto-refund contract
+│   └── README.md                    # Smart contract spec & compilation guide
+├── src/
+│   ├── circuits/                     # Off-chain Poseidon & SNARK circuit helpers
+│   │   ├── poseidon.ts              # Cryptographic Poseidon hash computation
+│   │   └── sealed_bid_circuit.ts    # ZK proof generator & verifier circuits
+│   ├── components/                   # Modular UI Component Architecture
+│   │   ├── auction/                  # Auction House & Escrow views
+│   │   │   ├── AuctionLotsView.tsx
+│   │   │   └── EscrowVaultView.tsx
+│   │   ├── governance/               # Governance, Audit & ZK Studio views
+│   │   │   ├── GovernanceAuditView.tsx
+│   │   │   ├── LedgerExplorerView.tsx
+│   │   │   └── ZKProofStudioView.tsx
+│   │   ├── layout/                   # Global Layout components
+│   │   │   ├── Header.tsx
+│   │   │   ├── Footer.tsx
+│   │   │   ├── NavigationTabs.tsx
+│   │   │   └── StatusBanner.tsx
+│   │   └── index.ts                  # Barrel export file
+│   ├── contracts/                    # Frontend TypeScript Contract SDK
+│   │   ├── auction_contract.ts      # Ledger state manager & contract transitions
+│   │   └── preprod_network.ts       # Midnight testnet RPC network simulator
+│   ├── hooks/                        # Application State Hooks
+│   │   └── useAuctionNetwork.ts     # React hook orchestrating contract state
+│   ├── tests/                        # Vitest Automated Test Suite
+│   │   └── auction_contract.test.ts # Contract state & ZK verification tests
+│   └── types/                        # TypeScript Domain Definitions
+│       └── ledger.ts                # Ledger state types & interfaces
+```
+
+---
+
+## 7. Screenshot ##
 
 **Wallet Connect**
 ![alt text](image.png)

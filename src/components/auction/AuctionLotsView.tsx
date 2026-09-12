@@ -12,8 +12,8 @@ import {
   Check,
   AlertTriangle
 } from 'lucide-react';
-import { SealedBidAuctionState, AuctionLot } from '../types/ledger';
-import { generateSecretSalt } from '../circuits/poseidon';
+import { SealedBidAuctionState, AuctionLot } from '../../types/ledger';
+import { generateSecretSalt } from '../../circuits/poseidon';
 
 interface AuctionLotsViewProps {
   contractState: SealedBidAuctionState;

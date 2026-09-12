@@ -1,0 +1,84 @@
+// =============================================================================
+// Midnight Smart Contract: Trustless ttDUST Escrow Vault & Auto-Refund Engine
+// Target Platform: Midnight Network (Cardano Privacy Sidechain)
+// Language: Compact Smart Contract DSL (v0.14+)
+// =============================================================================
+
+pragma language_version >= 0.14.0;
+
+import CompactStandardLibrary;
+
+export struct EscrowVaultEntry {
+  vaultId: Bytes<32>,
+  depositor: Address,
+  lotId: Uint<32>,
+  lockedBalance: Uint<64>,
+  isReleased: Boolean,
+  isRefunded: Boolean
+}
+
+export ledger {
+  totalVaultBalance: Uint<64>,
+  vaultEntries: Map<Bytes<32>, EscrowVaultEntry>,
+  organizerFeeAddress: Address
+}
+
+/**
+ * Deposit tokens into escrow vault bound to Poseidon hash commitment
+ */
+export transition lock_collateral(
+  vaultId: Bytes<32>,
+  lotId: Uint<32>,
+  amount: Uint<64>
+): Void {
+  assert(amount > 0, "Escrow deposit must be strictly positive");
+
+  const entry = EscrowVaultEntry {
+    vaultId: vaultId,
+    depositor: caller_address(),
+    lotId: lotId,
+    lockedBalance: amount,
+    isReleased: false,
+    isRefunded: false
+  };
+
+  ledger.vaultEntries.set(vaultId, entry);
+  ledger.totalVaultBalance += amount;
+}
+
+/**
+ * Release winning funds from escrow vault to auction organizer upon verified winner reveal
+ */
+export transition release_winner_escrow(
+  vaultId: Bytes<32>,
+  winningAmount: Uint<64>,
+  organizerAddress: Address
+): Void {
+  var entry = ledger.vaultEntries.get(vaultId);
+  assert(!entry.isReleased, "Escrow collateral already released");
+  assert(!entry.isRefunded, "Vault collateral already refunded");
+  assert(entry.lockedBalance >= winningAmount, "Insufficient locked escrow collateral");
+
+  entry.isReleased = true;
+  ledger.vaultEntries.set(vaultId, entry);
+  ledger.totalVaultBalance -= winningAmount;
+
+  // Transfer winning bid to seller/organizer
+  transfer_tokens(organizerAddress, winningAmount);
+}
+
+/**
+ * Batch execute automated refunds to losing bidders whose bids were not verified as highest
+ */
+export transition execute_losing_bidder_refund(vaultId: Bytes<32>): Void {
+  var entry = ledger.vaultEntries.get(vaultId);
+  assert(!entry.isReleased, "Cannot refund released winning collateral");
+  assert(!entry.isRefunded, "Vault collateral already refunded");
+
+  entry.isRefunded = true;
+  ledger.vaultEntries.set(vaultId, entry);
+  ledger.totalVaultBalance -= entry.lockedBalance;
+
+  // Refund locked ttDUST tokens directly back to bidder address
+  transfer_tokens(entry.depositor, entry.lockedBalance);
+}

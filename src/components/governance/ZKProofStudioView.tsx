@@ -1,6 +1,6 @@
 import React from 'react';
 import { Cpu, CheckCircle2, XCircle } from 'lucide-react';
-import { ProofLogEntry } from '../hooks/useAuctionNetwork';
+import { ProofLogEntry } from '../../hooks/useAuctionNetwork';
 
 interface ZKProofStudioViewProps {
   proofLog: ProofLogEntry[];

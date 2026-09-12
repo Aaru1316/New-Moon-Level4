@@ -1,13 +1,16 @@
 import { useAuctionNetwork } from './hooks/useAuctionNetwork';
-import { Header } from './components/Header';
-import { NavigationTabs } from './components/NavigationTabs';
-import { StatusBanner } from './components/StatusBanner';
-import { AuctionLotsView } from './components/AuctionLotsView';
-import { ZKProofStudioView } from './components/ZKProofStudioView';
-import { EscrowVaultView } from './components/EscrowVaultView';
-import { LedgerExplorerView } from './components/LedgerExplorerView';
-import { GovernanceAuditView } from './components/GovernanceAuditView';
-import { Footer } from './components/Footer';
+import {
+  Header,
+  NavigationTabs,
+  StatusBanner,
+  AuctionLotsView,
+  ZKProofStudioView,
+  EscrowVaultView,
+  LedgerExplorerView,
+  GovernanceAuditView,
+  Footer
+} from './components';
+
 
 export default function App() {
   const {

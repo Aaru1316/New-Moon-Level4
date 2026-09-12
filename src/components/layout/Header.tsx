@@ -1,7 +1,7 @@
 import React from 'react';
 import { ShieldCheck, Clock, Wallet } from 'lucide-react';
-import { WalletAccount } from '../contracts/preprod_network';
-import { SealedBidAuctionState } from '../types/ledger';
+import { WalletAccount } from '../../contracts/preprod_network';
+import { SealedBidAuctionState } from '../../types/ledger';
 
 interface HeaderProps {
   wallets: WalletAccount[];

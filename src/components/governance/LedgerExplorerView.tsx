@@ -1,6 +1,6 @@
 import React from 'react';
 import { Database } from 'lucide-react';
-import { SealedBidAuctionState } from '../types/ledger';
+import { SealedBidAuctionState } from '../../types/ledger';
 
 interface LedgerExplorerViewProps {
   contractState: SealedBidAuctionState;

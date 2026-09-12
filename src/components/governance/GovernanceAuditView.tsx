@@ -1,5 +1,5 @@
 import React from 'react';
-import { SealedBidAuctionState } from '../types/ledger';
+import { SealedBidAuctionState } from '../../types/ledger';
 
 interface GovernanceAuditViewProps {
   contractState: SealedBidAuctionState;

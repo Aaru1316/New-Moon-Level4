@@ -1,6 +1,6 @@
 import React from 'react';
 import { Layers, Cpu, Lock, Database, FileCheck } from 'lucide-react';
-import { SealedBidAuctionState } from '../types/ledger';
+import { SealedBidAuctionState } from '../../types/ledger';
 
 export type TabType = 'lots' | 'proof_studio' | 'escrow' | 'explorer' | 'audit';
 

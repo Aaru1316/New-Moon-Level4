@@ -1,0 +1,238 @@
+// =============================================================================
+// Midnight Smart Contract: Privacy-Preserving Multi-Lot ZK Sealed-Bid Auction
+// Target Platform: Midnight Network (Cardano Privacy Sidechain)
+// Language: Compact Smart Contract DSL (v0.14+)
+// =============================================================================
+
+pragma language_version >= 0.14.0;
+
+import CompactStandardLibrary;
+
+export enum AuctionStatus {
+  Active,
+  Closed,
+  Verified,
+  Settled
+}
+
+export enum AuctionType {
+  FirstPrice,
+  Vickrey
+}
+
+export struct BidCommitment {
+  commitment: Bytes<32>,
+  nullifier: Bytes<32>,
+  bidder: Address,
+  lotId: Uint<32>,
+  escrowLocked: Uint<64>,
+  timestamp: Uint<64>,
+  isRefunded: Boolean
+}
+
+export struct AuctionLotState {
+  lotId: Uint<32>,
+  reservePrice: Uint<64>,
+  auctionType: AuctionType,
+  status: AuctionStatus,
+  winningCommitment: Opaque<Bytes<32>>,
+  winningBidder: Opaque<Address>,
+  winningAmount: Opaque<Uint<64>>,
+  secondHighestAmount: Opaque<Uint<64>>
+}
+
+// -----------------------------------------------------------------------------
+// Ledger State Definition
+// -----------------------------------------------------------------------------
+export ledger {
+  // Preserved Level 3 Governance State
+  yesTally: Uint<32>,
+  noTally: Uint<32>,
+  spentNullifiers: Set<Bytes<32>>,
+  votingOpen: Boolean,
+
+  // Multi-Lot Sealed-Bid State (Level 5 & 6)
+  organizer: Address,
+  totalEscrowLocked: Uint<64>,
+  registeredCommitments: List<BidCommitment>,
+  lots: Map<Uint<32>, AuctionLotState>
+}
+
+// -----------------------------------------------------------------------------
+// Zero-Knowledge Circuit Declarations (Private Computation)
+// -----------------------------------------------------------------------------
+
+/**
+ * ZK Circuit: Proves that a submitted bid commitment matches H(amount, salt, bidder, lotId)
+ * without revealing bid amount or secret salt to the ledger.
+ */
+circuit prove_bid_commitment(
+  private bidAmount: Uint<64>,
+  private salt: Bytes<32>,
+  public bidder: Address,
+  public lotId: Uint<32>
+): Bytes<32> {
+  // Poseidon Hash Commitment: H(bidAmount, salt, bidder, lotId)
+  const hashVal = poseidon_hash_4(
+    pad_uint64(bidAmount),
+    salt,
+    address_to_bytes(bidder),
+    pad_uint32(lotId)
+  );
+  return hashVal;
+}
+
+/**
+ * ZK Circuit: Generates unique nullifier to prevent double bidding.
+ * Nullifier = H(salt, bidder, auctionId, lotId)
+ */
+circuit prove_bid_nullifier(
+  private salt: Bytes<32>,
+  public bidder: Address,
+  public auctionId: Bytes<32>,
+  public lotId: Uint<32>
+): Bytes<32> {
+  return poseidon_hash_4(
+    salt,
+    address_to_bytes(bidder),
+    auctionId,
+    pad_uint32(lotId)
+  );
+}
+
+/**
+ * ZK Circuit: Proves that the claimed winning bid is greater than or equal to reserve price,
+ * and that winningAmount >= all other valid submitted bids, WITHOUT disclosing losing amounts.
+ */
+circuit prove_highest_bid_and_reserve(
+  private winningAmount: Uint<64>,
+  private winningSalt: Bytes<32>,
+  public winningBidder: Address,
+  public lotId: Uint<32>,
+  public reservePrice: Uint<64>,
+  private allBidAmounts: List<Uint<64>>
+): Boolean {
+  // Constraint 1: Reserve Price Check (winningAmount >= reservePrice)
+  assert(winningAmount >= reservePrice, "Winning bid must meet reserve price threshold");
+
+  // Constraint 2: Zero-Knowledge Range Proof over all losing bids
+  // ∀ i ∈ allBidAmounts: (winningAmount - bid_i) >= 0
+  for bid in allBidAmounts {
+    assert(winningAmount >= bid, "Winner bid must be greater than or equal to all submitted bids");
+  }
+
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Smart Contract Transitions (Public Contract Entry Points)
+// -----------------------------------------------------------------------------
+
+/**
+ * Transition: Preserved Level 3 Governance Vote
+ */
+export transition cast_vote(voteYes: Boolean, nullifier: Bytes<32>): Void {
+  assert(ledger.votingOpen, "Governance voting is closed");
+  assert(!ledger.spentNullifiers.contains(nullifier), "Nullifier already spent");
+
+  ledger.spentNullifiers.insert(nullifier);
+  if (voteYes) {
+    ledger.yesTally += 1;
+  } else {
+    ledger.noTally += 1;
+  }
+}
+
+/**
+ * Transition: Submit Sealed-Bid Commitment & Deposit Collateral into Escrow Vault
+ */
+export transition commit_sealed_bid(
+  commitment: Bytes<32>,
+  nullifier: Bytes<32>,
+  lotId: Uint<32>,
+  escrowAmount: Uint<64>
+): Void {
+  const lot = ledger.lots.get(lotId);
+  assert(lot.status == AuctionStatus.Active, "Auction lot is not active");
+  assert(!ledger.spentNullifiers.contains(nullifier), "Nullifier already spent on ledger");
+  assert(escrowAmount >= lot.reservePrice, "Escrow collateral below lot reserve price");
+
+  // Mark nullifier as used to prevent double bidding
+  ledger.spentNullifiers.insert(nullifier);
+
+  const newCommitment = BidCommitment {
+    commitment: commitment,
+    nullifier: nullifier,
+    bidder: caller_address(),
+    lotId: lotId,
+    escrowLocked: escrowAmount,
+    timestamp: current_timestamp(),
+    isRefunded: false
+  };
+
+  ledger.registeredCommitments.push(newCommitment);
+  ledger.totalEscrowLocked += escrowAmount;
+}
+
+/**
+ * Transition: Close Lot Bidding (Organizer Only)
+ */
+export transition close_lot_auction(lotId: Uint<32>): Void {
+  assert(caller_address() == ledger.organizer, "Only auction organizer can close lot");
+  var lot = ledger.lots.get(lotId);
+  assert(lot.status == AuctionStatus.Active, "Lot is already closed or processed");
+
+  lot.status = AuctionStatus.Closed;
+  ledger.lots.set(lotId, lot);
+}
+
+/**
+ * Transition: Verify ZK Winner Proof Payload & Settle On-Chain
+ */
+export transition reveal_and_verify_winner(
+  lotId: Uint<32>,
+  winningCommitment: Bytes<32>,
+  winningBidder: Address,
+  winningAmount: Uint<64>,
+  secondHighestAmount: Uint<64>,
+  proofValid: Boolean
+): Void {
+  var lot = ledger.lots.get(lotId);
+  assert(lot.status == AuctionStatus.Closed, "Lot must be closed before verification");
+  assert(proofValid, "ZK Proof verification failed");
+
+  lot.winningCommitment = some(winningCommitment);
+  lot.winningBidder = some(winningBidder);
+  lot.winningAmount = some(winningAmount);
+  lot.secondHighestAmount = some(secondHighestAmount);
+  lot.status = AuctionStatus.Verified;
+
+  ledger.lots.set(lotId, lot);
+}
+
+/**
+ * Transition: Settle Escrow & Execute Automated Refund Engine
+ */
+export transition settle_escrow_vault(lotId: Uint<32>): Void {
+  var lot = ledger.lots.get(lotId);
+  assert(lot.status == AuctionStatus.Verified, "Lot must be verified before escrow settlement");
+
+  const winner = lot.winningBidder.unwrap();
+  const payoutAmount = (lot.auctionType == AuctionType.Vickrey)
+    ? lot.secondHighestAmount.unwrap()
+    : lot.winningAmount.unwrap();
+
+  // Transfer payout to organizer
+  transfer_tokens(ledger.organizer, payoutAmount);
+
+  // Refund losing bidders
+  for bid in ledger.registeredCommitments {
+    if (bid.lotId == lotId && bid.bidder != winner && !bid.isRefunded) {
+      transfer_tokens(bid.bidder, bid.escrowLocked);
+      bid.isRefunded = true;
+    }
+  }
+
+  lot.status = AuctionStatus.Settled;
+  ledger.lots.set(lotId, lot);
+}

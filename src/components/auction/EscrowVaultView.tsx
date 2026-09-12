@@ -1,6 +1,6 @@
 import React from 'react';
 import { Lock } from 'lucide-react';
-import { SealedBidAuctionState } from '../types/ledger';
+import { SealedBidAuctionState } from '../../types/ledger';
 
 interface EscrowVaultViewProps {
   contractState: SealedBidAuctionState;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckCircle2, XCircle, Zap } from 'lucide-react';
-import { StatusMessage } from '../hooks/useAuctionNetwork';
+import { StatusMessage } from '../../hooks/useAuctionNetwork';
 
 interface StatusBannerProps {
   statusMessage: StatusMessage | null;
