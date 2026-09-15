@@ -22,7 +22,7 @@ export function useAuctionNetwork() {
   const [contractState, setContractState] = useState<SealedBidAuctionState>(network.getContractState());
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'lots' | 'proof_studio' | 'escrow' | 'explorer' | 'audit'>('lots');
+  const [activeTab, setActiveTab] = useState<'lots' | 'managed_folders' | 'proof_studio' | 'escrow' | 'explorer' | 'audit'>('lots');
   const [selectedLotId, setSelectedLotId] = useState<string>('lot-1');
 
   // Form states for bidding
@@ -234,6 +234,56 @@ export function useAuctionNetwork() {
     }
   };
 
+  const handleCreateManagedFolder = (folderData: any) => {
+    const result = network.createManagedFolder(folderData);
+    refreshState();
+    if (result.success) {
+      setStatusMessage({ type: 'success', text: result.message });
+    } else {
+      setStatusMessage({ type: 'error', text: result.message });
+    }
+  };
+
+  const handleAddFileToManagedFolder = (folderId: string, fileData: any) => {
+    const result = network.addFileToManagedFolder(folderId, fileData);
+    refreshState();
+    if (result.success) {
+      setStatusMessage({ type: 'success', text: result.message });
+    } else {
+      setStatusMessage({ type: 'error', text: result.message });
+    }
+  };
+
+  const handleToggleLockManagedFolder = (folderId: string) => {
+    const result = network.toggleLockManagedFolder(folderId);
+    refreshState();
+    if (result.success) {
+      setStatusMessage({ type: 'info', text: result.message });
+    } else {
+      setStatusMessage({ type: 'error', text: result.message });
+    }
+  };
+
+  const handleDeleteManagedFolder = (folderId: string) => {
+    const result = network.deleteManagedFolder(folderId);
+    refreshState();
+    if (result.success) {
+      setStatusMessage({ type: 'info', text: result.message });
+    } else {
+      setStatusMessage({ type: 'error', text: result.message });
+    }
+  };
+
+  const handleRequestFaucet = () => {
+    const result = network.requestFaucet(500);
+    refreshState();
+    if (result.success) {
+      setStatusMessage({ type: 'success', text: result.message });
+    } else {
+      setStatusMessage({ type: 'error', text: result.message });
+    }
+  };
+
   return {
     wallets,
     activeWallet,
@@ -266,6 +316,11 @@ export function useAuctionNetwork() {
     handleCloseAuction,
     handleRevealAndVerify,
     handleSettleEscrow,
-    handleCastVote
+    handleCastVote,
+    handleCreateManagedFolder,
+    handleAddFileToManagedFolder,
+    handleToggleLockManagedFolder,
+    handleDeleteManagedFolder,
+    handleRequestFaucet
   };
 }

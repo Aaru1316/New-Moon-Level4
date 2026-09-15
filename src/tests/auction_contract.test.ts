@@ -199,4 +199,61 @@ describe('SealedBidAuctionContract — Level 5 & 6 Aaru Eclipse Test Suite', () 
     const bobCommitment = contract.getState().bidCommitments.find(b => b.bidderAddress === bobAddr);
     expect(bobCommitment?.isRefunded).toBe(true);
   });
+
+  // 9. Managed Folder Storage & Confidential Asset Vault
+  it('manages asset folders, file additions, and lock states correctly', () => {
+    const initialState = contract.getState();
+    expect(initialState.managedFolders.length).toBe(3);
+
+    // Create a new folder
+    const createResult = contract.createManagedFolder({
+      name: 'Custom Node Key Vault',
+      description: 'Encrypted key vault',
+      associatedLotId: 'lot-2',
+      category: 'Validator Keys',
+      accessPolicy: 'Winner Only',
+      isLocked: false,
+      createdBy: aliceAddr
+    });
+
+    expect(createResult.success).toBe(true);
+    let folders = contract.getState().managedFolders;
+    expect(folders.length).toBe(4);
+
+    const createdFolder = folders.find(f => f.name === 'Custom Node Key Vault');
+    expect(createdFolder).toBeDefined();
+
+    // Add file to folder
+    const addFileResult = contract.addFileToManagedFolder(createdFolder!.id, {
+      name: 'secret_node_key.pem',
+      sizeBytes: 4096,
+      fileType: 'application/x-pem-key',
+      poseidonHash: '0x1234567890abcdef',
+      ipfsCid: 'bafybeitestkeyhash',
+      privacyLevel: 'encrypted'
+    });
+
+    expect(addFileResult.success).toBe(true);
+    const updatedFolder = contract.getState().managedFolders.find(f => f.id === createdFolder!.id);
+    expect(updatedFolder?.files.length).toBe(1);
+    expect(updatedFolder?.files[0].name).toBe('secret_node_key.pem');
+
+    // Lock folder
+    const lockResult = contract.toggleLockManagedFolder(createdFolder!.id);
+    expect(lockResult.success).toBe(true);
+    expect(contract.getState().managedFolders.find(f => f.id === createdFolder!.id)?.isLocked).toBe(true);
+
+    // Attempt to add file to locked folder should fail
+    const addFileToLocked = contract.addFileToManagedFolder(createdFolder!.id, {
+      name: 'another_file.txt',
+      sizeBytes: 100,
+      fileType: 'text/plain',
+      poseidonHash: '0xabc',
+      ipfsCid: 'bafybeiabc',
+      privacyLevel: 'public'
+    });
+
+    expect(addFileToLocked.success).toBe(false);
+    expect(addFileToLocked.error).toBe('FOLDER_LOCKED');
+  });
 });

@@ -12,3 +12,6 @@ export { EscrowVaultView } from './auction/EscrowVaultView';
 export { GovernanceAuditView } from './governance/GovernanceAuditView';
 export { LedgerExplorerView } from './governance/LedgerExplorerView';
 export { ZKProofStudioView } from './governance/ZKProofStudioView';
+
+// Storage & Managed Folders Components
+export { ManagedFolderView } from './storage/ManagedFolderView';

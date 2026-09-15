@@ -4,6 +4,7 @@
 [![Network](https://img.shields.io/badge/Blockchain-Midnight%20%7C%20Cardano%20Preprod-003366)](https://preprod.cardanoscan.io)
 [![Privacy](https://img.shields.io/badge/Privacy-Zero--Knowledge%20Range%20Proof%20%2B%20Poseidon-purple)](#why-its-private)
 [![Escrow](https://img.shields.io/badge/Escrow-Trustless%20ttDUST%20Vault-emerald)](#trustless-escrow)
+[![X Profile](https://img.shields.io/badge/X-@aaruarya__13-black?logo=x)](https://x.com/aaruarya_13)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > **One-Line Pitch:** A privacy-preserving multi-lot decentralized sealed-bid auction engine on Midnight / Cardano Preprod featuring zero-knowledge range proofs, reserve price verification, trustless `ttDUST` token escrow vaults, and automated losing-bidder refunds.
@@ -73,7 +74,7 @@ Traditional auctions force participants to choose between public bidding (exposi
 ---
 
 ## 5. Midnight Smart Contracts Source Code (`/contracts`)
-
+.
 This repository includes native **Compact smart contract source code** written for the Midnight Network ZK privacy sidechain:
 
 - [`contracts/SealedBidAuction.compact`](contracts/SealedBidAuction.compact): Primary Midnight Compact contract with ZK Poseidon commitments, nullifier tracking, reserve price circuits (`prove_highest_bid_and_reserve`), and multi-lot state transitions.
@@ -102,6 +103,8 @@ New-Moon-Level4/
 │   │   │   ├── GovernanceAuditView.tsx
 │   │   │   ├── LedgerExplorerView.tsx
 │   │   │   └── ZKProofStudioView.tsx
+│   │   ├── storage/                  # Managed Folders & Confidential Asset Vault
+│   │   │   └── ManagedFolderView.tsx
 │   │   ├── layout/                   # Global Layout components
 │   │   │   ├── Header.tsx
 │   │   │   ├── Footer.tsx
@@ -135,7 +138,9 @@ New-Moon-Level4/
 **CI Pipeline**
 ![alt text](image-3.png)
 
-## 5. Local Setup & Usage Instructions
+---
+
+## 8. Local Setup & Usage Instructions
 
 ### Prerequisites
 - Node.js v20+
@@ -168,7 +173,17 @@ npm run build
 
 ---
 
-## 6. Test Suite & Coverage
+## 9. Managed Folder UI & Confidential Asset Vault
+
+Aaru Eclipse includes a full **Managed Asset Folder** storage system:
+- **Folder Categorization & Lot Linking:** Sellers and auction managers create organized managed folders (`NFT Assets`, `Validator Keys`, `Protocol Credentials`, `Audit Receipts`) tied directly to specific auction lots.
+- **Confidentiality & Access Control:** Fine-grained access policies (`Winner Only`, `Bidder Restricted`, `Public Metadata`, `Vault Admin`) ensure asset payloads remain locked until winner verification.
+- **Integrity Verification:** Each file within a managed folder is hashed via Poseidon commitments and mapped to IPFS/Arweave CIDs for instant on-chain integrity checks.
+- **Folder Lifecycle Management:** Support for creating new managed folders, uploading encrypted proof files, toggling folder lock status, and removing managed folders.
+
+---
+
+## 10. Test Suite & Coverage
 
 The project includes an automated Vitest test suite (`src/tests/auction_contract.test.ts`) covering:
 
@@ -179,6 +194,7 @@ The project includes an automated Vitest test suite (`src/tests/auction_contract
 5. **Valid Winner Reveal (Happy Path):** Highest bid ZK proof passes verification and satisfies reserve price.
 6. **Adversarial Tamper Rejection:** Lower bidders claiming victory are mathematically rejected.
 7. **Escrow Vault Settlement & Refunds:** Automated refund engine marks losing bids as refunded.
+8. **Managed Folder Storage:** Folder creation, locking, and encrypted file upload verification.
 
 ```bash
 # Run tests
@@ -187,11 +203,11 @@ npm test
 
 ---
 
-## 7. Deliverables & Links
+## 11. Deliverables & Links
 
 - **CI/CD Workflow File:** [.github/workflows/ci.yml](.github/workflows/ci.yml)
 - **Demo Video Script:** [DEMO_SCRIPT.md](DEMO_SCRIPT.md)
-- **Product X Profile:** [@AaruMidnightZK on X (Twitter)](https://x.com/AaruMidnightZK)
+- **Product X Profile:** [@aaruarya_13 on X (Twitter)](https://x.com/aaruarya_13)
 - **Demo Video Link:** [Watch Level 5/6 Sealed-Bid Auction Demo Video](https://youtube.com/watch?v=demo-aaru-level4)
 
 ---

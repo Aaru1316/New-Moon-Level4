@@ -40,6 +40,32 @@ export interface BidCommitmentEntry {
   isRefunded?: boolean;
 }
 
+// Managed Folder File Definition
+export interface ManagedFile {
+  id: string;
+  name: string;
+  sizeBytes: number;
+  fileType: string;
+  poseidonHash: string;
+  ipfsCid: string;
+  uploadedAt: number;
+  privacyLevel: 'public' | 'encrypted' | 'zk-proof';
+}
+
+// Managed Folder Vault Definition
+export interface ManagedFolder {
+  id: string;
+  name: string;
+  description: string;
+  associatedLotId?: string;
+  category: 'NFT Assets' | 'Validator Keys' | 'Protocol Credentials' | 'Audit Receipts' | 'Custom Vault';
+  accessPolicy: 'Public Metadata' | 'Bidder Restricted' | 'Winner Only' | 'Vault Admin';
+  isLocked: boolean;
+  createdAt: number;
+  createdBy: string;
+  files: ManagedFile[];
+}
+
 // Level 5 & 6 Extended Multi-Lot Sealed-Bid Auction State
 export interface SealedBidAuctionState extends BaseVotingState {
   auctionId: string;
@@ -48,6 +74,7 @@ export interface SealedBidAuctionState extends BaseVotingState {
   lots: AuctionLot[];
   bidCommitments: BidCommitmentEntry[];
   bidderNullifiers: string[]; // Set of nullifiers to prevent double-bidding
+  managedFolders: ManagedFolder[];
   isVerified: boolean;
   auditLogs: Array<{
     timestamp: number;

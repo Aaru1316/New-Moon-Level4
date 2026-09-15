@@ -190,4 +190,32 @@ export class PreprodNetworkSimulator {
   public castVote(vote: 'yes' | 'no', nullifier: string): ContractExecutionResult {
     return this.contract.castVote(vote, nullifier);
   }
+
+  public createManagedFolder(folderData: any): ContractExecutionResult {
+    return this.contract.createManagedFolder(folderData);
+  }
+
+  public addFileToManagedFolder(folderId: string, fileData: any): ContractExecutionResult {
+    return this.contract.addFileToManagedFolder(folderId, fileData);
+  }
+
+  public toggleLockManagedFolder(folderId: string): ContractExecutionResult {
+    return this.contract.toggleLockManagedFolder(folderId);
+  }
+
+  public deleteManagedFolder(folderId: string): ContractExecutionResult {
+    return this.contract.deleteManagedFolder(folderId);
+  }
+
+  public requestFaucet(amount: number = 500): { success: boolean; message: string; newBalance: number } {
+    if (!this.activeWallet) {
+      return { success: false, message: 'No active wallet connected', newBalance: 0 };
+    }
+    this.activeWallet.balance += amount;
+    return {
+      success: true,
+      message: `Dispensed ${amount} ttDUST testnet tokens from Midnight Preprod Faucet to ${this.activeWallet.name}!`,
+      newBalance: this.activeWallet.balance
+    };
+  }
 }

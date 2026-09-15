@@ -3,7 +3,7 @@
  * Preserves Level 3 Base Voting Ledger State while upgrading to Level 5 & 6 Sealed-Bid Privacy Capabilities.
  */
 
-import { SealedBidAuctionState, ContractExecutionResult, HighestBidProofPayload, AuctionLot } from '../types/ledger';
+import { SealedBidAuctionState, ContractExecutionResult, HighestBidProofPayload, AuctionLot, ManagedFolder, ManagedFile } from '../types/ledger';
 import { SealedBidCircuit } from '../circuits/sealed_bid_circuit';
 
 export class SealedBidAuctionContract {
@@ -65,6 +65,88 @@ export class SealedBidAuctionContract {
       }
     ];
 
+    const defaultManagedFolders: ManagedFolder[] = [
+      {
+        id: 'folder-lot-1',
+        name: 'Cybernetic Void Core #804 Assets',
+        description: 'Encrypted hi-res generative art metadata, 3D model GLB, and seller provenance signature.',
+        associatedLotId: 'lot-1',
+        category: 'NFT Assets',
+        accessPolicy: 'Winner Only',
+        isLocked: false,
+        createdAt: Date.now() - 86400000 * 2,
+        createdBy: '0x99887766554433221100aabbccddeeff00112233',
+        files: [
+          {
+            id: 'file-101',
+            name: 'cybernetic_core_master.glb',
+            sizeBytes: 14580000,
+            fileType: '3d/glb',
+            poseidonHash: '0x9a8f7c6e5d4c3b2a1f0e9d8c7b6a5f4e',
+            ipfsCid: 'bafybeigdyr321voidcore804masterhash',
+            uploadedAt: Date.now() - 86400000 * 2,
+            privacyLevel: 'encrypted'
+          },
+          {
+            id: 'file-102',
+            name: 'provenance_manifest.json',
+            sizeBytes: 4200,
+            fileType: 'application/json',
+            poseidonHash: '0x1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e',
+            ipfsCid: 'bafybeicertificateprovenance804',
+            uploadedAt: Date.now() - 86400000 * 2,
+            privacyLevel: 'public'
+          }
+        ]
+      },
+      {
+        id: 'folder-lot-2',
+        name: 'ZK Validator Node Key Credentials',
+        description: 'Validator auth certificates, private key share commitment, and node config payload.',
+        associatedLotId: 'lot-2',
+        category: 'Validator Keys',
+        accessPolicy: 'Bidder Restricted',
+        isLocked: false,
+        createdAt: Date.now() - 86400000,
+        createdBy: '0x99887766554433221100aabbccddeeff00112233',
+        files: [
+          {
+            id: 'file-201',
+            name: 'validator_key_share.pem.zk',
+            sizeBytes: 2048,
+            fileType: 'application/x-pem',
+            poseidonHash: '0xef8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b',
+            ipfsCid: 'bafybeivalidatorkeycluster09cert',
+            uploadedAt: Date.now() - 86400000,
+            privacyLevel: 'zk-proof'
+          }
+        ]
+      },
+      {
+        id: 'folder-lot-3',
+        name: 'Midnight Genesis Protocol Rights',
+        description: 'Protocol tier-1 governance token rights and fee discount redemption certificate.',
+        associatedLotId: 'lot-3',
+        category: 'Protocol Credentials',
+        accessPolicy: 'Winner Only',
+        isLocked: true,
+        createdAt: Date.now() - 43200000,
+        createdBy: '0x99887766554433221100aabbccddeeff00112233',
+        files: [
+          {
+            id: 'file-301',
+            name: 'genesis_pass_rights_v1.pdf',
+            sizeBytes: 520000,
+            fileType: 'application/pdf',
+            poseidonHash: '0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d',
+            ipfsCid: 'bafybeigenesispassprotocolrights',
+            uploadedAt: Date.now() - 43200000,
+            privacyLevel: 'encrypted'
+          }
+        ]
+      }
+    ];
+
     return {
       // Level 3 Base State (Preserved)
       yesTally: 0,
@@ -79,12 +161,13 @@ export class SealedBidAuctionContract {
       lots: defaultLots,
       bidCommitments: [],
       bidderNullifiers: [],
+      managedFolders: defaultManagedFolders,
       isVerified: false,
       auditLogs: [
         {
           timestamp: Date.now(),
           action: 'INITIALIZE',
-          details: `Multi-Lot ZK Auction Contract initialized on Midnight Preprod (3 active lots)`,
+          details: `Multi-Lot ZK Auction Contract initialized on Midnight Preprod (3 active lots, 3 managed folders)`,
           txHash: `0xtx_init_${Math.floor(Math.random() * 899999 + 100000)}`
         }
       ]
@@ -365,6 +448,123 @@ export class SealedBidAuctionContract {
     return {
       success: true,
       message: `Escrow settled and losing bids automatically refunded for [${lot.title}].`,
+      txHash,
+      updatedState: this.getState()
+    };
+  }
+
+  // =========================================================================
+  // Managed Folder Storage Methods
+  // =========================================================================
+  public createManagedFolder(folderData: Omit<ManagedFolder, 'id' | 'createdAt' | 'files'>): ContractExecutionResult {
+    const id = `folder-${Date.now().toString(36)}`;
+    const newFolder: ManagedFolder = {
+      ...folderData,
+      id,
+      createdAt: Date.now(),
+      files: []
+    };
+
+    if (!this.state.managedFolders) {
+      this.state.managedFolders = [];
+    }
+
+    this.state.managedFolders.push(newFolder);
+    const txHash = `0xtx_folder_${Math.floor(Math.random() * 899999 + 100000)}`;
+
+    this.state.auditLogs.push({
+      timestamp: Date.now(),
+      action: 'CREATE_FOLDER',
+      details: `Created Managed Folder [${newFolder.name}] (${newFolder.category})`,
+      txHash
+    });
+
+    return {
+      success: true,
+      message: `Managed Folder [${newFolder.name}] created successfully!`,
+      txHash,
+      updatedState: this.getState()
+    };
+  }
+
+  public addFileToManagedFolder(folderId: string, fileData: Omit<ManagedFile, 'id' | 'uploadedAt'>): ContractExecutionResult {
+    const folder = this.state.managedFolders?.find(f => f.id === folderId);
+    if (!folder) {
+      return { success: false, message: `Managed folder ${folderId} not found.`, error: 'FOLDER_NOT_FOUND' };
+    }
+
+    if (folder.isLocked) {
+      return { success: false, message: `Managed folder [${folder.name}] is locked. Unlock before adding files.`, error: 'FOLDER_LOCKED' };
+    }
+
+    const newFile: ManagedFile = {
+      ...fileData,
+      id: `file-${Date.now().toString(36)}`,
+      uploadedAt: Date.now()
+    };
+
+    folder.files.push(newFile);
+    const txHash = `0xtx_file_${Math.floor(Math.random() * 899999 + 100000)}`;
+
+    this.state.auditLogs.push({
+      timestamp: Date.now(),
+      action: 'ADD_FILE',
+      details: `Added file [${newFile.name}] to Managed Folder [${folder.name}]`,
+      txHash
+    });
+
+    return {
+      success: true,
+      message: `File [${newFile.name}] added to [${folder.name}]!`,
+      txHash,
+      updatedState: this.getState()
+    };
+  }
+
+  public toggleLockManagedFolder(folderId: string): ContractExecutionResult {
+    const folder = this.state.managedFolders?.find(f => f.id === folderId);
+    if (!folder) {
+      return { success: false, message: `Managed folder ${folderId} not found.`, error: 'FOLDER_NOT_FOUND' };
+    }
+
+    folder.isLocked = !folder.isLocked;
+    const txHash = `0xtx_lock_${Math.floor(Math.random() * 899999 + 100000)}`;
+
+    this.state.auditLogs.push({
+      timestamp: Date.now(),
+      action: folder.isLocked ? 'LOCK_FOLDER' : 'UNLOCK_FOLDER',
+      details: `${folder.isLocked ? 'Locked' : 'Unlocked'} Managed Folder [${folder.name}]`,
+      txHash
+    });
+
+    return {
+      success: true,
+      message: `Managed Folder [${folder.name}] is now ${folder.isLocked ? 'Locked' : 'Unlocked'}.`,
+      txHash,
+      updatedState: this.getState()
+    };
+  }
+
+  public deleteManagedFolder(folderId: string): ContractExecutionResult {
+    const folderIndex = this.state.managedFolders?.findIndex(f => f.id === folderId);
+    if (folderIndex === undefined || folderIndex === -1) {
+      return { success: false, message: `Managed folder ${folderId} not found.`, error: 'FOLDER_NOT_FOUND' };
+    }
+
+    const folderName = this.state.managedFolders[folderIndex].name;
+    this.state.managedFolders.splice(folderIndex, 1);
+    const txHash = `0xtx_del_folder_${Math.floor(Math.random() * 899999 + 100000)}`;
+
+    this.state.auditLogs.push({
+      timestamp: Date.now(),
+      action: 'DELETE_FOLDER',
+      details: `Deleted Managed Folder [${folderName}]`,
+      txHash
+    });
+
+    return {
+      success: true,
+      message: `Managed Folder [${folderName}] removed.`,
       txHash,
       updatedState: this.getState()
     };

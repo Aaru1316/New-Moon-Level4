@@ -4,6 +4,7 @@ import {
   NavigationTabs,
   StatusBanner,
   AuctionLotsView,
+  ManagedFolderView,
   ZKProofStudioView,
   EscrowVaultView,
   LedgerExplorerView,
@@ -43,7 +44,12 @@ export default function App() {
     handleCloseAuction,
     handleRevealAndVerify,
     handleSettleEscrow,
-    handleCastVote
+    handleCastVote,
+    handleCreateManagedFolder,
+    handleAddFileToManagedFolder,
+    handleToggleLockManagedFolder,
+    handleDeleteManagedFolder,
+    handleRequestFaucet
   } = useAuctionNetwork();
 
   return (
@@ -56,6 +62,7 @@ export default function App() {
           contractState={contractState}
           timeLeft={timeLeft}
           onWalletSwitch={handleWalletSwitch}
+          onRequestFaucet={handleRequestFaucet}
         />
         <NavigationTabs
           activeTab={activeTab}
@@ -93,6 +100,17 @@ export default function App() {
             onCloseAuction={handleCloseAuction}
             onRevealAndVerify={handleRevealAndVerify}
             onSettleEscrow={handleSettleEscrow}
+          />
+        )}
+
+        {activeTab === 'managed_folders' && (
+          <ManagedFolderView
+            contractState={contractState}
+            activeWalletAddress={activeWallet?.address}
+            onCreateFolder={handleCreateManagedFolder}
+            onAddFile={handleAddFileToManagedFolder}
+            onToggleLock={handleToggleLockManagedFolder}
+            onDeleteFolder={handleDeleteManagedFolder}
           />
         )}
 
