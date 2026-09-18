@@ -1,6 +1,14 @@
-# Aaru Eclipse — Privacy-Preserving Multi-Lot ZK Auction & Trustless Escrow Engine
-**Deploy link**  = https://new-moon-level4-g55xo64nb-aaru7.vercel.app/
-![CI Pipeline](https://github.com/Aaru1316/New-Moon-Level4/actions/workflows/ci.yml/badge.svg)
+<div align="center">
+  <img src="public/x_profile_banner.jpg" alt="Aaru Eclipse Official X Profile Banner" width="100%" />
+  <br/><br/>
+  <img src="public/logo.jpg" alt="Aaru Eclipse Logo" width="120" style="border-radius: 18px;" />
+  <h1>Aaru Eclipse — Privacy-Preserving Multi-Lot ZK Auction Engine</h1>
+  <p><strong>Official X (Twitter) Profile:</strong> <a href="https://x.com/aaruarya_13">@aaruarya_13</a></p>
+</div>
+
+**Deploy link:** https://new-moon-level4-g55xo64nb-aaru7.vercel.app/
+
+[![CI Pipeline](https://github.com/Aaru1316/New-Moon-Level4/actions/workflows/ci.yml/badge.svg)](https://github.com/Aaru1316/New-Moon-Level4/actions)
 [![Network](https://img.shields.io/badge/Blockchain-Midnight%20%7C%20Cardano%20Preprod-003366)](https://preprod.cardanoscan.io)
 [![Privacy](https://img.shields.io/badge/Privacy-Zero--Knowledge%20Range%20Proof%20%2B%20Poseidon-purple)](#why-its-private)
 [![Escrow](https://img.shields.io/badge/Escrow-Trustless%20ttDUST%20Vault-emerald)](#trustless-escrow)

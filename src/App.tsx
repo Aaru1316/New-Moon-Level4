@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useAuctionNetwork } from './hooks/useAuctionNetwork';
 import {
   Header,
@@ -9,11 +10,14 @@ import {
   EscrowVaultView,
   LedgerExplorerView,
   GovernanceAuditView,
-  Footer
+  Footer,
+  XProfileModal
 } from './components';
 
 
 export default function App() {
+  const [isXProfileOpen, setIsXProfileOpen] = useState<boolean>(false);
+
   const {
     wallets,
     activeWallet,
@@ -63,6 +67,7 @@ export default function App() {
           timeLeft={timeLeft}
           onWalletSwitch={handleWalletSwitch}
           onRequestFaucet={handleRequestFaucet}
+          onOpenXProfile={() => setIsXProfileOpen(true)}
         />
         <NavigationTabs
           activeTab={activeTab}
@@ -100,6 +105,7 @@ export default function App() {
             onCloseAuction={handleCloseAuction}
             onRevealAndVerify={handleRevealAndVerify}
             onSettleEscrow={handleSettleEscrow}
+            onOpenXProfile={() => setIsXProfileOpen(true)}
           />
         )}
 
@@ -134,7 +140,13 @@ export default function App() {
         )}
       </main>
 
-      <Footer />
+      <Footer onOpenXProfile={() => setIsXProfileOpen(true)} />
+
+      {/* Interactive X Profile Modal */}
+      <XProfileModal
+        isOpen={isXProfileOpen}
+        onClose={() => setIsXProfileOpen(false)}
+      />
     </div>
   );
 }

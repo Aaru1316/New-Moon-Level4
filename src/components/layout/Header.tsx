@@ -10,6 +10,7 @@ interface HeaderProps {
   timeLeft: number;
   onWalletSwitch: (address: string) => void;
   onRequestFaucet: () => void;
+  onOpenXProfile: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,7 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   contractState,
   timeLeft,
   onWalletSwitch,
-  onRequestFaucet
+  onRequestFaucet,
+  onOpenXProfile
 }) => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
@@ -26,15 +28,15 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Brand & Network Badges */}
         <div className="flex items-center space-x-3.5 w-full lg:w-auto justify-between lg:justify-start">
           <div className="flex items-center space-x-3">
-            <div className="relative group">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-indigo-600 rounded-xl blur opacity-60 group-hover:opacity-100 transition duration-300" />
-              <div className="relative w-11 h-11 bg-slate-950 rounded-xl flex items-center justify-center border border-cyan-500/30">
-                <ShieldCheck className="w-6 h-6 text-cyan-400" />
+            <div className="relative group cursor-pointer" onClick={onOpenXProfile} title="View Official X Profile & Branding">
+              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-600 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300" />
+              <div className="relative w-11 h-11 bg-slate-950 rounded-xl overflow-hidden border border-cyan-500/40 flex items-center justify-center">
+                <img src="/logo.jpg" alt="Aaru Eclipse Logo" className="w-full h-full object-cover" />
               </div>
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="text-lg font-extrabold tracking-tight text-white">AARU ECLIPSE</span>
+                <span className="text-lg font-black tracking-tight text-white">AARU ECLIPSE</span>
                 <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-cyan-950/80 text-cyan-400 border border-cyan-700/60">
                   Level 5 & 6 ZK
                 </span>
@@ -63,21 +65,18 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex flex-wrap items-center justify-end gap-2.5 w-full lg:w-auto">
           {/* Official Social & Repo Links */}
           <div className="flex items-center space-x-1.5">
-            {/* Verified X (Twitter) Profile Link */}
-            <a
-              href="https://x.com/aaruarya_13"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/90 text-slate-200 border border-slate-700/80 hover:border-cyan-500/60 hover:text-cyan-400 hover:shadow-lg hover:shadow-cyan-950/40 transition-all"
-              title="View Author & Project on X (Twitter)"
+            {/* Interactive X (Twitter) Profile Modal Trigger */}
+            <button
+              onClick={onOpenXProfile}
+              className="flex items-center space-x-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-slate-900 via-cyan-950/80 to-slate-900 text-cyan-300 border border-cyan-500/50 hover:border-cyan-400 hover:text-white hover:shadow-lg hover:shadow-cyan-950/60 active:scale-95 transition-all"
+              title="Click to view Official X Profile & Project Branding"
             >
-              {/* Official X Logo SVG */}
-              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+              <svg className="w-3.5 h-3.5 fill-cyan-400" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
               </svg>
               <span>@aaruarya_13</span>
-              <ExternalLink className="w-3 h-3 opacity-60" />
-            </a>
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+            </button>
 
             {/* GitHub Repo Link */}
             <a

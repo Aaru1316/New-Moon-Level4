@@ -3,6 +3,7 @@ export { Header } from './layout/Header';
 export { Footer } from './layout/Footer';
 export { NavigationTabs } from './layout/NavigationTabs';
 export { StatusBanner } from './layout/StatusBanner';
+export { XProfileModal } from './layout/XProfileModal';
 
 // Auction House Components
 export { AuctionLotsView } from './auction/AuctionLotsView';
