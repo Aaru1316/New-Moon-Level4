@@ -6,10 +6,11 @@
   <p><strong>Official X (Twitter) Profile:</strong> <a href="https://x.com/aaruarya_13">@aaruarya_13</a></p>
 </div>
 
-**Deploy link:** https://new-moon-level4-g55xo64nb-aaru7.vercel.app/
+**Deploy link:** https://new-moon-level4-f1ou.vercel.app/
 
-[![CI Pipeline](https://github.com/Aaru1316/New-Moon-Level4/actions/workflows/ci.yml/badge.svg)](https://github.com/Aaru1316/New-Moon-Level4/actions)
-[![Network](https://img.shields.io/badge/Blockchain-Midnight%20%7C%20Cardano%20Preprod-003366)](https://preprod.cardanoscan.io)
+[![CI Pipeline](https://github.com/Aaru1316/New-Moon-Level4/actions)]
+
+
 [![Privacy](https://img.shields.io/badge/Privacy-Zero--Knowledge%20Range%20Proof%20%2B%20Poseidon-purple)](#why-its-private)
 [![Escrow](https://img.shields.io/badge/Escrow-Trustless%20ttDUST%20Vault-emerald)](#trustless-escrow)
 [![X Profile](https://img.shields.io/badge/X-@aaruarya__13-black?logo=x)](https://x.com/aaruarya_13)
